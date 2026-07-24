@@ -1,33 +1,26 @@
 {
-    "summary": [
-        {
-            "name": "engine_configs",
-            "title": "引擎配置",
-            "primary": ["id"]
-        }
-    ],
-    "fields": [
-        {"name": "id", "title": "ID", "type": "str", "length": 32},
-        {"name": "org_id", "title": "机构ID", "type": "str", "length": 32, "nullable": "yes"},
-        {"name": "engine_type", "title": "引擎类型", "type": "str", "length": 32},
-        {"name": "engine_name", "title": "引擎名称", "type": "str", "length": 64},
-        {"name": "endpoint_url", "title": "服务地址", "type": "str", "length": 255},
-        {"name": "api_key", "title": "API密钥", "type": "str", "length": 255},
-        {"name": "model_name", "title": "模型名称", "type": "str", "length": 128},
-        {"name": "config_json", "title": "扩展配置JSON", "type": "text", "length": 4000},
-        {"name": "is_default", "title": "是否默认", "type": "int", "default": 0},
-        {"name": "priority", "title": "优先级", "type": "int", "default": 0},
-        {"name": "status", "title": "状态", "type": "str", "length": 16, "default": "active"},
-        {"name": "health_check_at", "title": "最近健康检查", "type": "datetime"},
-        {"name": "created_at", "title": "创建时间", "type": "datetime"},
-        {"name": "updated_at", "title": "更新时间", "type": "datetime"}
-    ],
-    "codes": [
-        {"field": "engine_type", "table": "appcodes_kv", "valuefield": "k", "textfield": "v", "cond": "parentid='engine_type'"},
-        {"field": "status", "table": "appcodes_kv", "valuefield": "k", "textfield": "v", "cond": "parentid='engine_status'"}
-    ],
-    "indexes": [
-        {"name": "idx_eng_type", "idxtype": "index", "idxfields": ["engine_type", "is_default"]},
-        {"name": "idx_eng_org", "idxtype": "index", "idxfields": ["org_id", "engine_type"]}
-    ]
+    "tblname": "engine_configs",
+    "params": {
+        "title": "引擎配置",
+        "browserfields": [
+            {"field": "engine_type", "title": "引擎类型", "width": "15%"},
+            {"field": "engine_name", "title": "名称", "width": "15%"},
+            {"field": "endpoint_url", "title": "服务地址", "width": "25%"},
+            {"field": "model_name", "title": "模型", "width": "15%"},
+            {"field": "is_default", "title": "默认", "width": "8%"},
+            {"field": "status", "title": "状态", "width": "10%"},
+            {"field": "org_id", "title": "机构", "width": "12%"}
+        ],
+        "editfields": [
+            {"field": "engine_type", "uitype": "Text", "required": true},
+            {"field": "engine_name", "uitype": "Text", "required": true},
+            {"field": "endpoint_url", "uitype": "Text"},
+            {"field": "api_key", "uitype": "Text"},
+            {"field": "model_name", "uitype": "Text"},
+            {"field": "is_default", "uitype": "Text"},
+            {"field": "config_json", "uitype": "Text"}
+        ],
+        "searchfields": ["engine_type", "engine_name", "endpoint_url"],
+        "sort": "engine_type, priority desc"
+    }
 }
