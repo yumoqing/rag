@@ -530,7 +530,7 @@ async def tag_search_handler(request, params_kw, *args, **kwargs):
         return json.dumps({"error": str(e)})
 
 
-def init_ragserver():
+def init_rag_module():
     env = ServerEnv()
     rf = RegisterFunction()
     rf.register("status", status_handler)
