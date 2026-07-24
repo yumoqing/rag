@@ -5,8 +5,11 @@ setup(
     version='0.1.0',
     packages=find_packages(),
     include_package_data=True,
+    data_files=[
+        ('rag/wwwroot', []),  # placeholder for discovery
+    ],
     package_data={
-        'rag': ['wwwroot/**/*', 'models/*.json', 'conf/*.json'],
+        '': ['wwwroot/**/*', 'json/*.json', 'models/*.json', 'conf/*.json'],
     },
     install_requires=[],
 )
