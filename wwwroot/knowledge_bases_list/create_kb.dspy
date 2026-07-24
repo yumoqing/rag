@@ -14,6 +14,6 @@ async with db.sqlorContext(dbname) as sor:
         {"id": kb_id, "name": name, "desc": desc, "org_id": userorgid})
     return {
         "widgettype": "urlwidget",
-        "options": {"url": entire_url('/knowledge_bases_list/index.ui')}
+        "options": {"url": entire_url('/rag/knowledge_bases_list/index.ui')}
     }
 return {"error": "failed"}

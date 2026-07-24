@@ -48,7 +48,7 @@ async def kb_list_handler(request, params_kw, *args, **kwargs):
                     {"widgettype":"HBox","options":{"spacing":"12px"},"subwidgets":[
                         {"widgettype":"Text","options":{"text":"📄 "+str(doc_count)+"文档","cfontsize":12,"color":"#666"}},
                         {"widgettype":"Text","options":{"text":"💾 "+size_str,"cfontsize":12,"color":"#666"}}]}],
-                    "binds":[{"wid":"self","event":"click","actiontype":"urlwidget","target":"app.rag_main_content","mode":"replace","options":{"url":"/knowledge_bases_list/detail.ui","params":{"kb_id":str(r.id),"kb_name":str(r.name)}}}]}
+                    "binds":[{"wid":"self","event":"click","actiontype":"urlwidget","target":"app.rag_main_content","mode":"replace","options":{"url":"/rag/knowledge_bases_list/detail.ui","params":{"kb_id":str(r.id),"kb_name":str(r.name)}}}]}
                 cards.append(card)
             if not cards:
                 cards.append({"widgettype":"Text","options":{"text":"暂无知识库","color":"#aaa","cfontsize":14,"halign":"center"}})

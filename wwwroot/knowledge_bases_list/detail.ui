@@ -8,7 +8,7 @@
             "subwidgets": [
                 {"widgettype": "Text", "options": {"text": "← 知识库列表", "css": "clickable", "cfontsize": 14, "color": "#4a90d9"}, "binds": [
                     {"wid": "self", "event": "click", "actiontype": "urlwidget", "target": "app.rag_main_content", "mode": "replace",
-                     "options": {"url": "{{entire_url('/knowledge_bases_list/index.ui')}}"}}
+                     "options": {"url": "{{entire_url('/rag/knowledge_bases_list/index.ui')}}"}}
                 ]},
                 {"widgettype": "Text", "options": {"text": " / ", "cfontsize": 14, "color": "#ccc"}},
                 {"widgettype": "Text", "options": {"text": "📚 {{params_kw.kb_name or '知识库'}}", "cfontsize": 16, "fontWeight": "bold", "color": "#333"}},
