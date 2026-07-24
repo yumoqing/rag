@@ -1,0 +1,26 @@
+{
+    "tblname": "engine_configs",
+    "params": {
+        "title": "引擎配置",
+        "browserfields": [
+            {"field": "engine_type", "title": "引擎类型", "width": "15%"},
+            {"field": "engine_name", "title": "名称", "width": "15%"},
+            {"field": "endpoint_url", "title": "服务地址", "width": "25%"},
+            {"field": "model_name", "title": "模型", "width": "15%"},
+            {"field": "is_default", "title": "默认", "width": "8%"},
+            {"field": "status", "title": "状态", "width": "10%"},
+            {"field": "org_id", "title": "机构", "width": "12%"}
+        ],
+        "editfields": [
+            {"field": "engine_type", "uitype": "Text", "required": true},
+            {"field": "engine_name", "uitype": "Text", "required": true},
+            {"field": "endpoint_url", "uitype": "Text"},
+            {"field": "api_key", "uitype": "Text"},
+            {"field": "model_name", "uitype": "Text"},
+            {"field": "is_default", "uitype": "Text"},
+            {"field": "config_json", "uitype": "Text"}
+        ],
+        "searchfields": ["engine_type", "engine_name", "endpoint_url"],
+        "sort": "engine_type, priority desc"
+    }
+}

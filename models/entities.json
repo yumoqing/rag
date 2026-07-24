@@ -1,0 +1,35 @@
+{
+    "summary": [
+        {
+            "name": "entities",
+            "title": "实体",
+            "primary": ["id"]
+        }
+    ],
+    "fields": [
+        {"name": "id", "title": "ID", "type": "str", "length": 32},
+        {"name": "kb_id", "title": "知识库ID", "type": "str", "length": 32},
+        {"name": "name", "title": "实体名", "type": "str", "length": 255},
+        {"name": "entity_type", "title": "实体类型", "type": "str", "length": 64},
+        {"name": "description", "title": "描述", "type": "text", "length": 2000},
+        {"name": "graph_node_id", "title": "图节点ID", "type": "str", "length": 128},
+        {"name": "source_doc_ids", "title": "来源文档ID列表", "type": "text", "length": 2000},
+        {"name": "face_embedding_id", "title": "人脸特征ID", "type": "str", "length": 128},
+        {"name": "voice_embedding_id", "title": "声纹特征ID", "type": "str", "length": 128},
+        {"name": "metadata", "title": "元数据JSON", "type": "text", "length": 2000},
+        {"name": "org_id", "title": "所属机构", "type": "str", "length": 32},
+        {"name": "created_at", "title": "创建时间", "type": "datetime"},
+        {"name": "updated_at", "title": "更新时间", "type": "datetime"}
+    ],
+    "codes": [
+        {"field": "entity_type", "table": "appcodes_kv", "valuefield": "k", "textfield": "v", "cond": "parentid='entity_type'"},
+        {"field": "kb_id", "table": "knowledge_bases", "valuefield": "id", "textfield": "name"}
+    ],
+    "indexes": [
+        {"name": "idx_entity_kb", "idxtype": "index", "idxfields": ["kb_id"]},
+        {"name": "idx_entity_name", "idxtype": "index", "idxfields": ["kb_id", "name"]},
+        {"name": "idx_entity_type", "idxtype": "index", "idxfields": ["kb_id", "entity_type"]},
+        {"name": "idx_entity_face", "idxtype": "index", "idxfields": ["face_embedding_id"]},
+        {"name": "idx_entity_voice", "idxtype": "index", "idxfields": ["voice_embedding_id"]}
+    ]
+}

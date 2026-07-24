@@ -1,0 +1,19 @@
+ns = params_kw.copy()
+db = DBPools()
+dbname = get_module_dbname('rag')
+async with db.sqlorContext(dbname) as sor:
+    import uuid
+    env = request._run_ns
+    userorgid = await env.get_userorgid()
+    kb_id = uuid.uuid4().hex[:12]
+    name = ns.get("name", "")
+    desc = ns.get("description", "")
+    await sor.sqlExe(
+        "INSERT INTO knowledge_bases (id, name, description, org_id, embedding_engine, vdb_collection, doc_count, total_size, chunk_count, status, created_at) "
+        "VALUES (${id}$, ${name}$, ${desc}$, ${org_id}$, 'CLIP ViT-H-14', 'rag_collection', 0, 0, 0, 'active', NOW())",
+        {"id": kb_id, "name": name, "desc": desc, "org_id": userorgid})
+    return {
+        "widgettype": "urlwidget",
+        "options": {"url": entire_url('/knowledge_bases_list/index.ui')}
+    }
+return {"error": "failed"}

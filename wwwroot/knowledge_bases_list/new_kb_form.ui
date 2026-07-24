@@ -1,0 +1,30 @@
+{
+    "widgettype": "VBox",
+    "options": {"padding": "16px", "spacing": "12px"},
+    "subwidgets": [
+        {"widgettype": "Text", "options": {"text": "新建知识库", "cfontsize": 18, "fontWeight": "bold"}},
+        {
+            "widgettype": "Form",
+            "id": "kb_form",
+            "options": {
+                "cols": 1,
+                "fields": [
+                    {"name": "name", "label": "名称", "uitype": "str", "required": true},
+                    {"name": "description", "label": "描述", "uitype": "text"}
+                ]
+            }
+        }
+    ],
+    "binds": [
+        {
+            "wid": "kb_form",
+            "event": "submit",
+            "actiontype": "urlwidget",
+            "target": "app.rag_main_content",
+            "mode": "replace",
+            "options": {
+                "url": "{{entire_url('./create_kb.dspy')}}"
+            }
+        }
+    ]
+}

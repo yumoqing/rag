@@ -1,0 +1,148 @@
+{
+    "widgettype": "VBox",
+    "options": {
+        "cheight": 40,
+        "width": "100%",
+        "padding": "16px",
+        "spacing": "16px"
+    },
+    "subwidgets": [
+        {
+            "widgettype": "Text",
+            "options": {
+                "text": "引擎配置",
+                "cfontsize": 22,
+                "fontWeight": "bold",
+                "color": "#333"
+            }
+        },
+        {
+            "widgettype": "Text",
+            "options": {
+                "text": "管理多媒体RAG的各层引擎，支持租户级自定义覆盖",
+                "color": "#888",
+                "cfontsize": 14
+            }
+        },
+        {
+            "widgettype": "HBox",
+            "options": {
+                "width": "100%",
+                "spacing": "12px",
+                "wrap": true
+            },
+            "subwidgets": [
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 20,
+                        "cheight": 10,
+                        "bgcolor": "#f8f9fa",
+                        "padding": "12px",
+                        "css": "card"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "🔤 向量化引擎", "cfontsize": 16, "fontWeight": "bold"}},
+                        {"widgettype": "Text", "options": {"text": "CLIP ViT-H-14", "cfontsize": 14, "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": "1024维 · 图文跨模态", "cfontsize": 12, "color": "#888"}},
+                        {"widgettype": "Text", "options": {"text": "状态: ✅ 运行中", "cfontsize": 12, "color": "#50b86c"}},
+                        {"widgettype": "Text", "options": {"text": "端口: 9086", "cfontsize": 12, "color": "#aaa"}}
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 20,
+                        "cheight": 10,
+                        "bgcolor": "#f8f9fa",
+                        "padding": "12px",
+                        "css": "card"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "🗄️ 向量数据库", "cfontsize": 16, "fontWeight": "bold"}},
+                        {"widgettype": "Text", "options": {"text": "Milvus Lite", "cfontsize": 14, "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": "COSINE度量 · HNSW索引", "cfontsize": 12, "color": "#888"}},
+                        {"widgettype": "Text", "options": {"text": "状态: ✅ 运行中", "cfontsize": 12, "color": "#50b86c"}},
+                        {"widgettype": "Text", "options": {"text": "端口: 8886", "cfontsize": 12, "color": "#aaa"}}
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 20,
+                        "cheight": 10,
+                        "bgcolor": "#f8f9fa",
+                        "padding": "12px",
+                        "css": "card"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "📊 重排引擎", "cfontsize": 16, "fontWeight": "bold"}},
+                        {"widgettype": "Text", "options": {"text": "BGE Reranker v2-m3", "cfontsize": 14, "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": "Cross-encoder精排", "cfontsize": 12, "color": "#888"}},
+                        {"widgettype": "Text", "options": {"text": "状态: ✅ 运行中", "cfontsize": 12, "color": "#50b86c"}},
+                        {"widgettype": "Text", "options": {"text": "端口: 9090", "cfontsize": 12, "color": "#aaa"}}
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 20,
+                        "cheight": 10,
+                        "bgcolor": "#f8f9fa",
+                        "padding": "12px",
+                        "css": "card"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "🕸️ 知识图谱", "cfontsize": 16, "fontWeight": "bold"}},
+                        {"widgettype": "Text", "options": {"text": "NetworkX", "cfontsize": 14, "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": "实体关系 · 邻居查询", "cfontsize": 12, "color": "#888"}},
+                        {"widgettype": "Text", "options": {"text": "状态: ✅ 运行中", "cfontsize": 12, "color": "#50b86c"}},
+                        {"widgettype": "Text", "options": {"text": "端口: 9092", "cfontsize": 12, "color": "#aaa"}}
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 20,
+                        "cheight": 10,
+                        "bgcolor": "#f8f9fa",
+                        "padding": "12px",
+                        "css": "card"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "🏷️ 实体识别", "cfontsize": 16, "fontWeight": "bold"}},
+                        {"widgettype": "Text", "options": {"text": "GLiNER Multitask", "cfontsize": 14, "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": "零样本NER · 中文支持", "cfontsize": 12, "color": "#888"}},
+                        {"widgettype": "Text", "options": {"text": "状态: ✅ 运行中", "cfontsize": 12, "color": "#50b86c"}},
+                        {"widgettype": "Text", "options": {"text": "端口: 9093", "cfontsize": 12, "color": "#aaa"}}
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 20,
+                        "cheight": 10,
+                        "bgcolor": "#f8f9fa",
+                        "padding": "12px",
+                        "css": "card"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "👤 人脸识别", "cfontsize": 16, "fontWeight": "bold"}},
+                        {"widgettype": "Text", "options": {"text": "InsightFace buffalo_l", "cfontsize": 14, "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": "检测+识别 · 512维", "cfontsize": 12, "color": "#888"}},
+                        {"widgettype": "Text", "options": {"text": "状态: ✅ 运行中", "cfontsize": 12, "color": "#50b86c"}},
+                        {"widgettype": "Text", "options": {"text": "端口: 9091", "cfontsize": 12, "color": "#aaa"}}
+                    ]
+                }
+            ]
+        },
+        {
+            "widgettype": "Text",
+            "options": {
+                "text": "💡 引擎默认全局配置，租户可在订阅设置中覆盖为私有实例",
+                "color": "#aaa",
+                "cfontsize": 12
+            }
+        }
+    ]
+}

@@ -1,0 +1,121 @@
+{
+    "widgettype": "VBox",
+    "options": {
+        "cheight": 40,
+        "width": "100%",
+        "padding": "16px",
+        "spacing": "16px"
+    },
+    "subwidgets": [
+        {
+            "widgettype": "Text",
+            "options": {
+                "text": "订阅管理",
+                "cfontsize": 22,
+                "fontWeight": "bold",
+                "color": "#333"
+            }
+        },
+        {
+            "widgettype": "Text",
+            "options": {
+                "text": "选择适合您的套餐，按磁盘容量计费，随时升级",
+                "color": "#888",
+                "cfontsize": 14
+            }
+        },
+        {
+            "widgettype": "HBox",
+            "options": {
+                "width": "100%",
+                "spacing": "16px",
+                "justifyContent": "center"
+            },
+            "subwidgets": [
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 18,
+                        "bgcolor": "#ffffff",
+                        "padding": "20px",
+                        "css": "card",
+                        "border": "2px solid #e0e0e0"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "Free", "cfontsize": 20, "fontWeight": "bold", "color": "#333"}},
+                        {"widgettype": "Text", "options": {"text": "免费试用", "cfontsize": 14, "color": "#888"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Text", "options": {"text": "¥0/月", "cfontsize": 28, "fontWeight": "bold", "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Text", "options": {"text": "✓ 1GB 磁盘容量", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 100 文档", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 3 知识库", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 基础向量化引擎", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✗ 自定义引擎", "cfontsize": 13, "color": "#ccc"}},
+                        {"widgettype": "Text", "options": {"text": "✗ 知识图谱", "cfontsize": 13, "color": "#ccc"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Button", "options": {"label": "当前套餐", "bgcolor": "#e0e0e0", "color": "#888"}}
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 18,
+                        "bgcolor": "#f0f7ff",
+                        "padding": "20px",
+                        "css": "card",
+                        "border": "2px solid #4a90d9"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "Pro", "cfontsize": 20, "fontWeight": "bold", "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": "推荐", "cfontsize": 14, "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Text", "options": {"text": "¥299/月", "cfontsize": 28, "fontWeight": "bold", "color": "#4a90d9"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Text", "options": {"text": "✓ 50GB 磁盘容量", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 5000 文档", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 20 知识库", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 全引擎支持", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 自定义引擎配置", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 知识图谱+人脸识别", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Button", "options": {"label": "升级到 Pro", "bgcolor": "#4a90d9", "color": "#fff"}}
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "cwidth": 18,
+                        "bgcolor": "#ffffff",
+                        "padding": "20px",
+                        "css": "card",
+                        "border": "2px solid #e0e0e0"
+                    },
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "Enterprise", "cfontsize": 20, "fontWeight": "bold", "color": "#333"}},
+                        {"widgettype": "Text", "options": {"text": "企业定制", "cfontsize": 14, "color": "#888"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Text", "options": {"text": "联系我们", "cfontsize": 28, "fontWeight": "bold", "color": "#333"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Text", "options": {"text": "✓ 无限磁盘容量", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 无限文档", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 无限知识库", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 私有化部署", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 专属GPU实例", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": "✓ 7×24技术支持", "cfontsize": 13, "color": "#666"}},
+                        {"widgettype": "Text", "options": {"text": ""}},
+                        {"widgettype": "Button", "options": {"label": "联系销售", "bgcolor": "#333", "color": "#fff"}}
+                    ]
+                }
+            ]
+        },
+        {
+            "widgettype": "Text",
+            "options": {
+                "text": "💡 当前: Free 套餐 · 已用 0B/1GB · 0/100 文档 · 0/3 知识库",
+                "color": "#aaa",
+                "cfontsize": 12
+            }
+        }
+    ]
+}

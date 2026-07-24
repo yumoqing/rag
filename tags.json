@@ -1,0 +1,22 @@
+{
+    "tblname": "tags",
+    "params": {
+        "title": "标签管理",
+        "browserfields": [
+            {"field": "name", "title": "标签名", "width": "25%"},
+            {"field": "color", "title": "颜色", "width": "15%"},
+            {"field": "kb_id", "title": "知识库", "width": "30%"},
+            {"field": "created_at", "title": "创建时间", "width": "30%"}
+        ],
+        "editfields": [
+            {"field": "name", "uitype": "Text", "required": true, "label": "标签名"},
+            {"field": "kb_id", "uitype": "Text", "required": true, "label": "知识库ID"},
+            {"field": "color", "uitype": "Text", "default": "#3b82f6", "label": "颜色(#hex)"}
+        ],
+        "searchfields": ["name"],
+        "sort": "created_at desc",
+        "data_filter": {
+            "org_id": "{{userorgid}}"
+        }
+    }
+}

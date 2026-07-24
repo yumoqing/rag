@@ -1,0 +1,7 @@
+ns = params_kw.copy()
+db = DBPools()
+dbname = get_module_dbname('rag')
+async with db.sqlorContext(dbname) as sor:
+    await sor.sqlExe("DELETE FROM document_chunks WHERE id=${id}$", {"id": ns.get("id","")})
+    return {"widgettype": "Message", "options": {"user_data": {"id": ns.get("id","")}}}
+return {"error": "failed"}

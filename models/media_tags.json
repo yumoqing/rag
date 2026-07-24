@@ -1,0 +1,28 @@
+{
+    "summary": [
+        {
+            "name": "media_tags",
+            "title": "媒体标签关联",
+            "primary": ["id"]
+        }
+    ],
+    "fields": [
+        {"name": "id", "title": "ID", "type": "str", "length": 32},
+        {"name": "kb_id", "title": "知识库ID", "type": "str", "length": 32},
+        {"name": "media_type", "title": "媒体类型", "type": "str", "length": 32},
+        {"name": "media_id", "title": "媒体ID", "type": "str", "length": 32},
+        {"name": "tag_id", "title": "标签ID", "type": "str", "length": 32},
+        {"name": "created_at", "title": "创建时间", "type": "datetime"}
+    ],
+    "codes": [
+        {"field": "media_type", "table": "appcodes_kv", "valuefield": "k", "textfield": "v", "cond": "parentid='media_type'"},
+        {"field": "tag_id", "table": "tags", "valuefield": "id", "textfield": "name"},
+        {"field": "kb_id", "table": "knowledge_bases", "valuefield": "id", "textfield": "name"}
+    ],
+    "indexes": [
+        {"name": "idx_mt_media", "idxtype": "index", "idxfields": ["media_type", "media_id"]},
+        {"name": "idx_mt_tag", "idxtype": "index", "idxfields": ["tag_id"]},
+        {"name": "idx_mt_kb", "idxtype": "index", "idxfields": ["kb_id"]},
+        {"name": "idx_mt_unique", "idxtype": "unique", "idxfields": ["media_type", "media_id", "tag_id"]}
+    ]
+}
