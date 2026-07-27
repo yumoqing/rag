@@ -196,7 +196,7 @@ async def doc_delete_handler(request, params_kw, *args, **kwargs):
                 vector_ids = [c.vector_id for c in chunks if c.vector_id]
                 if vector_ids:
                     try:
-                        _call_vdb("/v1/delete", {"colname": doc.kb_id, "ids": vector_ids})
+                        await _call_vdb_async("/v1/delete", {"colname": doc.kb_id, "ids": vector_ids})
                     except Exception as e:
                         exception(f"vdb delete failed: {e}")
 
@@ -204,7 +204,7 @@ async def doc_delete_handler(request, params_kw, *args, **kwargs):
             entities = await sor.R("entities", {"kb_id": doc.kb_id})
             if entities:
                 try:
-                    _call_graph("/api/graph/save", {"graph": doc.kb_id})
+                    await _call_graph_async("/api/graph/save", {"graph": doc.kb_id})
                 except Exception as e:
                     exception(f"graph cleanup failed: {e}")
 
@@ -250,8 +250,53 @@ def _detect_file_type(name, mime):
     return "other"
 
 
+async def _call_uapi(upappid, apiname, data, timeout=10):
+    """Call GPU service via uapi config in rag database"""
+    import aiohttp
+    env = ServerEnv()
+    async with get_sor_context(env, 'rag') as sor:
+        recs = await sor.sqlExe(
+            "SELECT a.path, a.httpmethod, a.data as tmpl, b.baseurl "
+            "FROM uapi a JOIN upapp b ON a.upappid=b.id "
+            "WHERE a.upappid=${upappid}$ AND a.name=${apiname}$",
+            {"upappid": upappid, "apiname": apiname})
+        if not recs:
+            raise Exception(f"uapi not found: {upappid}/{apiname}")
+        cfg = recs[0]
+    body = await _render_tmpl(cfg.tmpl, data)
+    url = f"{cfg.baseurl}{cfg.path}"
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+        async with session.post(url, data=body, headers={"Content-Type": "application/json"}) as resp:
+            return await resp.json()
+
+
+async def _render_tmpl(tmpl, data):
+    """Simple Jinja2-style template rendering for uapi data templates"""
+    import re
+    result = tmpl
+    for key, val in data.items():
+        result = result.replace("{{" + key + "}}", str(val))
+        result = result.replace("{{json.dumps(" + key + ")}}", json.dumps(val, ensure_ascii=False))
+    return result
+
+
+async def _call_vdb_async(path, data, timeout=10):
+    """Call VDB service via uapi (mapping path to apiname)"""
+    apiname_map = {"/v1/upsert": "upsert", "/v1/search": "search", "/v1/delete": "delete"}
+    apiname = apiname_map.get(path, "search")
+    return await _call_uapi("rag-vdb", apiname, data, timeout)
+
+
+async def _call_graph_async(path, data, timeout=10):
+    """Call Graph service via uapi"""
+    apiname_map = {"/api/graph/save": "save", "/api/graph/query": "query", "/api/graph/delete": "delete"}
+    apiname = apiname_map.get(path, "save")
+    return await _call_uapi("rag-graph", apiname, data, timeout)
+
+
+# Keep sync wrappers for backward compat (note: these block in async context, prefer async versions)
 def _call_vdb(path, data, timeout=10):
-    """Call VDB service"""
+    """Synchronous VDB call — deprecated, use _call_vdb_async in async context"""
     import urllib.request
     url = f"http://localhost:8886{path}"
     req = urllib.request.Request(url, data=json.dumps(data).encode(),
@@ -261,7 +306,7 @@ def _call_vdb(path, data, timeout=10):
 
 
 def _call_graph(path, data, timeout=10):
-    """Call Graph service"""
+    """Synchronous Graph call — deprecated, use _call_graph_async in async context"""
     import urllib.request
     url = f"http://localhost:9092{path}"
     req = urllib.request.Request(url, data=json.dumps(data).encode(),
