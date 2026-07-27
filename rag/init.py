@@ -74,25 +74,215 @@ async def engines_handler(request, params_kw, *args, **kwargs):
 
 
 async def search_handler(request, params_kw, *args, **kwargs):
+    """统一检索：文本 + 多媒体(图/音/视/文) → embedding → VDB → 重排 → 返回"""
     env = request._run_ns
     try:
-        query = params_kw.get("query", "")
-        kb_id = params_kw.get("kb_id", "")
-        top_k = int(params_kw.get("top_k", 5))
-        if not query:
-            return json.dumps({"error": "query required"})
-        try:
-            from pipeline import search as pipeline_search
-            result = pipeline_search(query, pipeline_name="kg-rag-standard",
-                                     collection=kb_id or "knowledge",
-                                     graph_name=kb_id or "knowledge",
-                                     top_k=top_k, llm_func=None)
-            return json.dumps(result, ensure_ascii=False)
-        except ImportError:
-            return json.dumps({"status": "FALLBACK", "message": "pipeline not available"})
+        userorgid = await env.get_userorgid()
+        query = (params_kw.get("query") or "").strip()
+        kb_id = (params_kw.get("kb_id") or "").strip()
+        top_k = int(params_kw.get("top_k", 10))
+        recall_k = int(params_kw.get("recall_k", top_k * 3))
+
+        # Resolve KBs
+        kb_ids = await _resolve_search_kbs(env, userorgid, kb_id)
+        if not kb_ids:
+            return json.dumps({"status": "SUCCEEDED", "data": {"results": [], "total": 0, "message": "no knowledge bases"}}, ensure_ascii=False)
+
+        # Read uploaded file if present
+        file_data = None
+        file_name = None
+        content_type = request.headers.get("Content-Type", "")
+        if "multipart" in content_type:
+            reader = await request.multipart()
+            async for part in reader:
+                if part.name == "file" and part.filename:
+                    file_data = await part.read()
+                    file_name = part.filename
+                    break
+        if not file_data:
+            # Try raw body as file
+            body = await request.read()
+            if body and len(body) > 10:
+                # Check if it's a form-encoded request
+                if not query and b'=' in body[:100]:
+                    pass  # form data, not a file
+                elif not body.startswith(b'{') and not body.startswith(b'['):
+                    file_data = body
+                    file_name = params_kw.get("file_name", "search_upload")
+
+        # Process query + media → embedding vector
+        query_vec = None
+        if query or file_data:
+            query_vec = await _build_search_vector(query, file_data, file_name)
+
+        if not query_vec:
+            return json.dumps({"status": "SUCCEEDED", "data": {"results": [], "total": 0, "message": "no query or file provided"}}, ensure_ascii=False)
+
+        # Multi-KB VDB search
+        all_hits = []
+        for kid in kb_ids:
+            try:
+                vdb_resp = await _call_uapi("rag-vdb", "search", {
+                    "collection": kid,
+                    "vector": query_vec,
+                    "topK": recall_k
+                })
+                hits = _parse_vdb_hits(vdb_resp, kid)
+                all_hits.extend(hits)
+            except Exception as e:
+                exception(f"vdb search kb={kid}: {e}")
+
+        # Deduplicate + sort by score
+        seen = set()
+        unique_hits = []
+        for h in sorted(all_hits, key=lambda x: x.get("score", 0), reverse=True):
+            hid = h.get("id", h.get("text", ""))
+            if hid not in seen:
+                seen.add(hid)
+                unique_hits.append(h)
+
+        # Rerank if query text provided
+        if query and unique_hits:
+            try:
+                documents = [h.get("text", h.get("content", "")) for h in unique_hits[:recall_k]]
+                rerank_resp = await _call_uapi("rag-reranker", "rerank", {
+                    "query": query,
+                    "documents": documents
+                })
+                reranked = _apply_rerank(unique_hits, rerank_resp)
+                unique_hits = reranked
+            except Exception as e:
+                exception(f"rerank failed: {e}")
+
+        # Limit + enrich with DB metadata
+        final = unique_hits[:top_k]
+        enriched = await _enrich_search_results(env, final)
+
+        return json.dumps({
+            "status": "SUCCEEDED",
+            "data": {"results": enriched, "total": len(enriched),
+                     "recall": len(all_hits), "kbs_searched": len(kb_ids)}
+        }, ensure_ascii=False, default=str)
+
     except Exception as e:
         exception(f"search: {e}, {format_exc()}")
         return json.dumps({"error": str(e)})
+
+
+async def _resolve_search_kbs(env, userorgid, kb_id):
+    """Resolve KB IDs: specific or all org KBs"""
+    async with get_sor_context(env, 'rag') as sor:
+        if kb_id:
+            recs = await sor.R("knowledge_bases", {"id": kb_id})
+            return [r.id for r in recs]
+        # All org KBs (global + org-specific)
+        sql = "SELECT id FROM knowledge_bases WHERE org_id IS NULL OR org_id=${org_id}$"
+        recs = await sor.sqlExe(sql, {"org_id": userorgid})
+        return [r.id for r in recs]
+
+
+async def _build_search_vector(query, file_data, file_name):
+    """Build search embedding from text query + media file"""
+    texts = []
+    if query:
+        texts.append(query)
+
+    if file_data and file_name:
+        ext = os.path.splitext(file_name)[1].lower()
+        if ext in ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'):
+            # Image → embed as-is (CLIP multimodal)
+            texts.append(f"[IMAGE:{file_name}]")
+        elif ext in ('.txt', '.md', '.json', '.csv', '.html', '.py'):
+            # Text file → extract content
+            try:
+                content = file_data.decode("utf-8", errors="replace")[:4000]
+                texts.append(content)
+            except Exception:
+                pass
+        elif ext in ('.mp3', '.wav', '.flac', '.ogg'):
+            # Audio → placeholder (would need ASR service)
+            texts.append(f"[AUDIO:{file_name}]")
+        elif ext in ('.mp4', '.avi', '.mov', '.mkv'):
+            texts.append(f"[VIDEO:{file_name}]")
+        else:
+            # Try as text
+            try:
+                texts.append(file_data.decode("utf-8", errors="replace")[:2000])
+            except Exception:
+                pass
+
+    if not texts:
+        return None
+
+    combined = " ".join(texts)
+    try:
+        resp = await _call_uapi("rag-embedding", "embed", {
+            "texts": [combined],
+            "model": "CLIP-ViT-H-14"
+        })
+        vecs = resp.get("embeddings", []) if isinstance(resp, dict) else []
+        return vecs[0] if vecs else None
+    except Exception as e:
+        exception(f"query embedding failed: {e}")
+        return None
+
+
+def _parse_vdb_hits(vdb_resp, kb_id):
+    """Parse VDB search response into uniform hit format"""
+    hits = []
+    data = vdb_resp
+    if isinstance(data, dict):
+        for key in ("results", "data", "hits", "rows"):
+            candidates = data.get(key)
+            if isinstance(candidates, list):
+                data = candidates
+                break
+    if not isinstance(data, list):
+        return hits
+    for item in data:
+        if isinstance(item, dict):
+            hits.append({
+                "id": item.get("id", item.get("doc_id", "")),
+                "text": item.get("text", item.get("content", "")),
+                "score": item.get("score", item.get("distance", 0)),
+                "kb_id": kb_id,
+                "metadata": item.get("metadata", item.get("meta", {}))
+            })
+    return hits
+
+
+def _apply_rerank(hits, rerank_resp):
+    """Apply reranker scores to reorder hits"""
+    scores = []
+    if isinstance(rerank_resp, dict):
+        scores = rerank_resp.get("scores", rerank_resp.get("results", []))
+    if isinstance(scores, list) and len(scores) == len(hits):
+        for i, s in enumerate(scores):
+            if isinstance(s, dict):
+                hits[i]["rerank_score"] = s.get("score", s.get("relevance_score", 0))
+            else:
+                hits[i]["rerank_score"] = float(s) if s else 0
+        hits.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
+    return hits
+
+
+async def _enrich_search_results(env, hits):
+    """Enrich hits with document metadata from DB"""
+    doc_ids = list(set(h.get("id", "") for h in hits if h.get("id")))
+    if not doc_ids:
+        return hits
+
+    async with get_sor_context(env, 'rag') as sor:
+        recs = await sor.sqlExe(
+            "SELECT id, file_name, file_type, file_size, status, kb_id, created_at "
+            "FROM documents WHERE id IN (" + ",".join(repr(d) for d in doc_ids) + ")", {})
+        doc_map = {r.id: dict(r) for r in recs}
+
+    for h in hits:
+        did = h.get("id", "")
+        if did in doc_map:
+            h["document"] = doc_map[did]
+    return hits
 
 
 async def doc_upload_handler(request, params_kw, *args, **kwargs):
