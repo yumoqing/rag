@@ -138,26 +138,27 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
                 "UPDATE knowledge_bases SET doc_count=doc_count+1, total_size=total_size+${size}$ WHERE id=${kb_id}$",
                 {"size": file_size, "kb_id": kb_id})
 
-        # Trigger async ingest for text-based files
+        # Trigger async ingest for text-based files via uapi
         ingest_result = None
         if file_type == "text":
             try:
                 text = file_data.decode("utf-8", errors="replace")
-                from pipeline import ingest as pipeline_ingest
-                ingest_result = pipeline_ingest(
-                    text, pipeline_name="kg-rag-standard",
-                    collection=kb_id, graph_name=kb_id, llm_func=None)
+                ingest_result = await _rag_ingest_async(env, text, kb_id, doc_id)
                 # Update status to done
                 async with get_sor_context(env, 'rag') as sor:
+                    chunks_n = ingest_result.get("chunks", 0) if ingest_result else 0
                     await sor.sqlExe(
                         "UPDATE documents SET status='done', chunk_count=${chunks}$ WHERE id=${id}$",
-                        {"chunks": ingest_result.get("chunks", 0) if ingest_result else 0, "id": doc_id})
-                    if ingest_result:
+                        {"chunks": chunks_n, "id": doc_id})
+                    if chunks_n:
                         await sor.sqlExe(
                             "UPDATE knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$",
-                            {"n": ingest_result.get("chunks", 0), "kb_id": kb_id})
+                            {"n": chunks_n, "kb_id": kb_id})
             except Exception as e:
-                exception(f"async ingest failed: {e}")
+                exception(f"uapi ingest failed: {e}")
+                async with get_sor_context(env, 'rag') as sor:
+                    await sor.sqlExe(
+                        "UPDATE documents SET status='error' WHERE id=${id}$", {"id": doc_id})
 
         return json.dumps({
             "status": "SUCCEEDED",
@@ -196,17 +197,16 @@ async def doc_delete_handler(request, params_kw, *args, **kwargs):
                 vector_ids = [c.vector_id for c in chunks if c.vector_id]
                 if vector_ids:
                     try:
-                        await _call_vdb_async("/v1/delete", {"colname": doc.kb_id, "ids": vector_ids})
+                        await _call_uapi("rag-vdb", "delete",
+                                         {"colname": doc.kb_id, "ids": vector_ids})
                     except Exception as e:
                         exception(f"vdb delete failed: {e}")
 
-            # Delete from graph
-            entities = await sor.R("entities", {"kb_id": doc.kb_id})
-            if entities:
-                try:
-                    await _call_graph_async("/api/graph/save", {"graph": doc.kb_id})
-                except Exception as e:
-                    exception(f"graph cleanup failed: {e}")
+            # Delete entities from graph
+            try:
+                await _call_uapi("rag-graph", "delete", {"graph": doc.kb_id})
+            except Exception as e:
+                exception(f"graph delete failed: {e}")
 
             # Delete DB records
             await sor.sqlExe("DELETE FROM document_chunks WHERE doc_id=${id}$", {"id": doc_id})
@@ -268,6 +268,93 @@ async def _call_uapi(upappid, apiname, data, timeout=10):
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
         async with session.post(url, data=body, headers={"Content-Type": "application/json"}) as resp:
             return await resp.json()
+
+
+async def _rag_ingest_async(env, text, kb_id, doc_id):
+    """RAG ingestion pipeline via uapi: chunk → embed → VDB → NER → graph"""
+    chunks = _split_text(text, chunk_size=512, overlap=64)
+    if not chunks:
+        return {"chunks": 0}
+    chunk_count = len(chunks)
+
+    # 1. Embedding
+    try:
+        emb_resp = await _call_uapi("rag-embedding", "embed",
+                                    {"texts": chunks, "model": "CLIP-ViT-H-14"})
+        embeddings = emb_resp.get("embeddings", []) if isinstance(emb_resp, dict) else []
+    except Exception as e:
+        exception(f"embedding failed: {e}")
+        embeddings = []
+
+    # 2. VDB upsert
+    vector_ids = []
+    if embeddings:
+        try:
+            vdb_data = {
+                "collection": kb_id,
+                "data": [{"id": f"{doc_id}_{i}", "vector": emb, "text": chunks[i]}
+                         for i, emb in enumerate(embeddings)]
+            }
+            vdb_resp = await _call_uapi("rag-vdb", "upsert", vdb_data)
+            vector_ids = [f"{doc_id}_{i}" for i in range(len(embeddings))]
+        except Exception as e:
+            exception(f"vdb upsert failed: {e}")
+
+    # 3. NER entity extraction
+    entities_found = []
+    try:
+        full_text = " ".join(chunks[:20])  # first 20 chunks for NER
+        ner_resp = await _call_uapi("rag-ner", "entities", {"text": full_text})
+        entities_found = ner_resp.get("entities", []) if isinstance(ner_resp, dict) else []
+    except Exception as e:
+        exception(f"ner failed: {e}")
+
+    # 4. Save to graph
+    if entities_found:
+        try:
+            graph_data = {
+                "graph": kb_id,
+                "data": {"entities": entities_found, "source_doc": doc_id}
+            }
+            await _call_uapi("rag-graph", "save", graph_data)
+        except Exception as e:
+            exception(f"graph save failed: {e}")
+
+    # 5. Record chunks in DB
+    async with get_sor_context(env, 'rag') as sor:
+        for i, (chunk_text, vid) in enumerate(zip(chunks, vector_ids)):
+            await sor.sqlExe(
+                "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
+                "VALUES (${id}$, ${doc_id}$, ${kb_id}$, ${idx}$, ${content}$, ${vid}$, NOW())",
+                {"id": f"{doc_id}_c{i}", "doc_id": doc_id, "kb_id": kb_id,
+                 "idx": i, "content": chunk_text[:2000], "vid": vid})
+
+    return {"chunks": chunk_count, "vectors": len(vector_ids),
+            "entities": len(entities_found)}
+
+
+def _split_text(text, chunk_size=512, overlap=64):
+    """Simple text chunker: paragraph-based with size limits"""
+    paragraphs = text.split('\n')
+    chunks = []
+    current = ""
+    for p in paragraphs:
+        p = p.strip()
+        if not p:
+            continue
+        if len(current) + len(p) < chunk_size:
+            current = (current + " " + p).strip()
+        else:
+            if current:
+                chunks.append(current)
+            current = p
+    if current:
+        chunks.append(current)
+    # If still no chunks (single giant paragraph), force-split by size
+    if not chunks and text.strip():
+        for i in range(0, len(text), chunk_size - overlap):
+            chunks.append(text[i:i + chunk_size])
+    return chunks
 
 
 async def _render_tmpl(tmpl, data):
