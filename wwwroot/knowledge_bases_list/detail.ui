@@ -1,226 +1,83 @@
 {
-  "widgettype": "VBox",
-  "options": {
-    "cheight": 40,
-    "width": "100%",
-    "padding": "0",
-    "spacing": 0
-  },
-  "subwidgets": [
-    {
-      "widgettype": "HBox",
-      "options": {
-        "width": "100%",
-        "bgcolor": "#f8f9fa",
-        "padding": "10px 16px",
-        "alignItems": "center",
-        "borderBottom": "1px solid #e0e0e0"
-      },
-      "subwidgets": [
+    "widgettype": "VBox",
+    "options": {"cheight": 40, "width": "100%", "padding": "0", "spacing": 0},
+    "subwidgets": [
         {
-          "widgettype": "Text",
-          "options": {
-            "text": "← 知识库列表",
-            "css": "clickable",
-            "cfontsize": 14,
-            "color": "#4a90d9"
-          },
-          "binds": [
-            {
-              "wid": "self",
-              "event": "click",
-              "actiontype": "urlwidget",
-              "target": "app.rag_main_content",
-              "mode": "replace",
-              "options": {
-                "url": "{{entire_url('/rag/knowledge_bases_list/index.ui')}}"
-              }
-            }
-          ]
+            "widgettype": "HBox",
+            "options": {"width": "100%", "bgcolor": "#f8f9fa", "padding": "10px 16px", "alignItems": "center", "borderBottom": "1px solid #e0e0e0"},
+            "subwidgets": [
+                {"widgettype": "Text", "options": {"text": "← 知识库列表", "css": "clickable", "cfontsize": 14, "color": "#4a90d9"}, "binds": [
+                    {"wid": "self", "event": "click", "actiontype": "urlwidget", "target": "app.rag_main_content", "mode": "replace",
+                     "options": {"url": "{{entire_url('/rag/knowledge_bases_list/index.ui')}}"}}
+                ]},
+                {"widgettype": "Text", "options": {"text": " / ", "cfontsize": 14, "color": "#ccc"}},
+                {"widgettype": "Text", "options": {"text": "📚 {{params_kw.kb_name or '知识库'}}", "cfontsize": 16, "fontWeight": "bold", "color": "#333"}},
+                {"widgettype": "Text", "options": {"text": "", "css": "filler"}}
+            ]
         },
         {
-          "widgettype": "Text",
-          "options": {
-            "text": " / ",
-            "cfontsize": 14,
-            "color": "#ccc"
-          }
-        },
-        {
-          "widgettype": "Text",
-          "options": {
-            "text": "📚 {{params_kw.kb_name or '知识库'}}",
-            "cfontsize": 16,
-            "fontWeight": "bold",
-            "color": "#333"
-          }
-        },
-        {
-          "widgettype": "Text",
-          "options": {
-            "text": "",
-            "css": "filler"
-          }
+            "widgettype": "HBox",
+            "options": {"css": "filler", "width": "100%", "spacing": 0},
+            "subwidgets": [
+                {
+                    "widgettype": "VBox",
+                    "options": {"cwidth": 16, "bgcolor": "#fafafa", "borderRight": "1px solid #e0e0e0", "spacing": 0},
+                    "subwidgets": [
+                        {
+                            "widgettype": "HBox",
+                            "options": {"padding": "10px 12px", "bgcolor": "#f0f0f0", "borderBottom": "1px solid #e0e0e0"},
+                            "subwidgets": [
+                                {"widgettype": "Text", "options": {"text": "📁 目录结构", "cfontsize": 13, "fontWeight": "bold", "color": "#666"}}
+                            ]
+                        },
+                        {
+                            "widgettype": "Tree",
+                            "options": {
+                                "id": "dir_tree",
+                                "parentField": "parentid",
+                                "idField": "id",
+                                "textField": "label",
+                                "dataurl": "{{entire_url('./get_tree_data.dspy')}}?kb_id={{params_kw.kb_id}}",
+                                "newdata_params": {"kb_id": "{{params_kw.kb_id}}"},
+                                "editable": {
+                                    "fields": [
+                                        {"name": "name", "title": "名称", "type": "str", "length": 255, "uitype": "str", "label": "名称"}
+                                    ],
+                                    "add_url": "{{entire_url('./new_tree_item.dspy')}}",
+                                    "update_url": "{{entire_url('./update_tree_item.dspy')}}",
+                                    "delete_url": "{{entire_url('./delete_tree_item.dspy')}}"
+                                }
+                            }
+                        }
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "id": "detail_content",
+                    "options": {"css": "filler", "padding": "16px", "spacing": "0"},
+                    "subwidgets": [
+                        {
+                            "widgettype": "urlwidget",
+                            "id": "file_list_panel",
+                            "options": {
+                                "url": "{{entire_url('./file_list.dspy')}}?kb_id={{params_kw.kb_id}}&id=__root__"
+                            }
+                        }
+                    ],
+                    "binds": [
+                        {
+                            "wid": "dir_tree",
+                            "event": "node_selected",
+                            "actiontype": "urlwidget",
+                            "target": "file_list_panel",
+                            "mode": "replace",
+                            "options": {
+                                "url": "{{entire_url('./file_list.dspy')}}?kb_id={{params_kw.kb_id}}"
+                            }
+                        }
+                    ]
+                }
+            ]
         }
-      ]
-    },
-    {
-      "widgettype": "HBox",
-      "options": {
-        "css": "filler",
-        "width": "100%",
-        "spacing": 0
-      },
-      "subwidgets": [
-        {
-          "widgettype": "VBox",
-          "options": {
-            "cwidth": 16,
-            "bgcolor": "#fafafa",
-            "borderRight": "1px solid #e0e0e0",
-            "spacing": 0,
-            "overflow": "hidden",
-            "flexShrink": "0"
-          },
-          "subwidgets": [
-            {
-              "widgettype": "HBox",
-              "options": {
-                "padding": "10px 12px",
-                "bgcolor": "#f0f0f0",
-                "borderBottom": "1px solid #e0e0e0"
-              },
-              "subwidgets": [
-                {
-                  "widgettype": "Text",
-                  "options": {
-                    "text": "📁 目录结构",
-                    "cfontsize": 13,
-                    "fontWeight": "bold",
-                    "color": "#666"
-                  }
-                }
-              ]
-            },
-            {
-              "widgettype": "Tree",
-              "options": {
-                "title": "目录",
-                "id": "dir_tree",
-                "parentField": "parentid",
-                "idField": "id",
-                "textField": "label",
-                "dataurl": "{{entire_url('./get_tree_data.dspy')}}?kb_id={{params_kw.kb_id}}",
-                "newdata_params": {
-                  "kb_id": "{{params_kw.kb_id}}"
-                },
-                "editable": {
-                  "fields": [
-                    {
-                      "name": "name",
-                      "title": "名称",
-                      "type": "str",
-                      "length": 255,
-                      "uitype": "str",
-                      "label": "名称"
-                    }
-                  ],
-                  "add_url": "{{entire_url('./new_tree_item.dspy')}}",
-                  "update_url": "{{entire_url('./update_tree_item.dspy')}}",
-                  "delete_url": "{{entire_url('./delete_tree_item.dspy')}}"
-                }
-              },
-              "binds": [
-                {
-                  "wid": "self",
-                  "event": "selected",
-                  "actiontype": "script",
-                  "script": "window._rag_current_folder = event.params.id ? event.params.id : ''"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "widgettype": "VBox",
-          "options": {
-            "id": "detail_content",
-            "css": "filler",
-            "padding": "16px",
-            "spacing": "12px"
-          },
-          "subwidgets": [
-            {
-              "widgettype": "VBox",
-              "options": {
-                "id": "drop_zone",
-                "width": "100%",
-                "cheight": 8,
-                "bgcolor": "#f8f9fa",
-                "padding": "16px",
-                "css": "card",
-                "border": "2px dashed #3b82f6",
-                "alignItems": "center",
-                "justifyContent": "center"
-              },
-              "subwidgets": [
-                {
-                  "widgettype": "Text",
-                  "options": {
-                    "text": "📂 点击选择文件上传",
-                    "cfontsize": 15,
-                    "color": "#888"
-                  }
-                },
-                {
-                  "widgettype": "Text",
-                  "options": {
-                    "text": "支持 TXT/PDF/JPG/PNG/MP3/WAV/MP4",
-                    "cfontsize": 12,
-                    "color": "#aaa"
-                  }
-                },
-                {
-                  "widgettype": "Button",
-                  "options": {
-                    "label": "选择文件",
-                    "bgcolor": "#3b82f6",
-                    "color": "#fff",
-                    "marginTop": "8px"
-                  },
-                  "binds": [
-                    {
-                      "wid": "self",
-                      "event": "click",
-                      "actiontype": "script",
-                      "script": "var i=document.createElement('input');i.type='file';i.multiple=true;i.onchange=function(){var u=new URL(window.location.href);var kb=u.searchParams.get('kb_id')||'';var fd=window._rag_current_folder||'';for(var j=0;j<i.files.length;j++){var f=i.files[j];var x=new XMLHttpRequest();x.open('POST','/api/doc/upload?kb_id='+encodeURIComponent(kb)+'&file_name='+encodeURIComponent(f.name)+'&folder='+encodeURIComponent(fd));x.onload=function(){if(x.status===200){var st=document.getElementById('upload_status');if(st)st.innerText='上传成功: '+f.name;else location.reload()}};x.send(f)}};i.click()"
-                    }
-                  ]
-                },
-                {
-                  "widgettype": "Text",
-                  "options": {
-                    "id": "upload_status",
-                    "cfontsize": 12,
-                    "color": "#50b86c",
-                    "marginTop": "8px",
-                    "text": ""
-                  }
-                }
-              ]
-            },
-            {
-              "widgettype": "Text",
-              "options": {
-                "text": "暂无文件",
-                "cfontsize": 13,
-                "color": "#aaa",
-                "halign": "center"
-              }
-            }
-          ]
-        }
-      ]
-    }
-  ]
+    ]
 }
