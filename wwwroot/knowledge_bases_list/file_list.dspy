@@ -32,12 +32,14 @@ async with db.sqlorContext(dbname) as sor:
         })
 
 def fmt_size(sz):
-    if sz < 1024:
-        return str(sz) + "B"
-    elif sz < 1024*1024:
-        return str(round(sz/1024, 1)) + "KB"
-    else:
-        return str(round(sz/(1024*1024), 1)) + "MB"
+    if sz < 1024: return str(sz) + "B"
+    elif sz < 1024*1024: return str(round(sz/1024, 1)) + "KB"
+    else: return str(round(sz/(1024*1024), 1)) + "MB"
+
+def trunc_name(name, maxlen=28):
+    if len(name) > maxlen:
+        return name[:maxlen-3] + "..."
+    return name
 
 header = {
     "widgettype": "HBox",
@@ -53,68 +55,46 @@ file_widgets = [header]
 
 if not rows:
     file_widgets.append({
-        "widgettype": "Text",
-        "options": {"text": "暂无文件", "cfontsize": 13, "color": "#aaa", "halign": "center", "marginTop": "40px"}
+        "widgettype": "Text", "options": {"text": "暂无文件", "cfontsize": 13, "color": "#aaa", "halign": "center", "marginTop": "40px"}
     })
 else:
     for f in rows:
-        sc = "#50b86c"
-        st = "已完成"
-        if f["status"] == "pending":
-            sc = "#e6a23c"
-            st = "处理中"
-        elif f["status"] == "error":
-            sc = "#f56c6c"
-            st = "失败"
+        sc = "#50b86c"; st = "完成"
+        if f["status"] == "pending": sc = "#e6a23c"; st = "处理中"
+        elif f["status"] == "error": sc = "#f56c6c"; st = "失败"
 
         file_url = entire_url(f["file_path"])
         del_url = entire_url('./delete_file.dspy') + "?kb_id=" + kb_id + "&doc_id=" + f["id"] + "&folder_id=" + folder_id + "&folder_label=" + folder_label
+        display_name = trunc_name(f["file_name"])
 
         row = {
             "widgettype": "HBox",
-            "options": {"width": "100%", "padding": "8px 12px", "borderBottom": "1px solid #f0f0f0", "alignItems": "center"},
+            "options": {"width": "100%", "padding": "6px 12px", "borderBottom": "1px solid #f0f0f0", "alignItems": "center"},
             "subwidgets": [
-                {"widgettype": "Text", "options": {"text": "📄 " + f["file_name"], "cfontsize": 13, "color": "#333", "textAlign": "left", "css": "filler"}},
-                {"widgettype": "Text", "options": {"text": f["file_type"].upper(), "cfontsize": 11, "color": "#999", "marginRight": "8px", "cwidth": 5, "textAlign": "center"}},
-                {"widgettype": "Text", "options": {"text": fmt_size(f["file_size"]), "cfontsize": 11, "color": "#999", "marginRight": "8px", "cwidth": 8, "textAlign": "right"}},
-                {"widgettype": "Text", "options": {"text": st, "cfontsize": 11, "color": sc, "marginRight": "8px", "cwidth": 6, "textAlign": "center"}},
-                {"widgettype": "Text", "options": {"text": f["created_at"], "cfontsize": 11, "color": "#999", "marginRight": "8px", "cwidth": 12}},
+                {"widgettype": "Text", "options": {
+                    "text": "📄 " + display_name, "cfontsize": 13, "color": "#333",
+                    "cwidth": 28, "textAlign": "left", "overflow": "hidden",
+                    "title": f["file_name"]
+                }},
+                {"widgettype": "Text", "options": {"text": f["file_type"].upper(), "cfontsize": 11, "color": "#999", "cwidth": 5, "textAlign": "center"}},
+                {"widgettype": "Text", "options": {"text": fmt_size(f["file_size"]), "cfontsize": 11, "color": "#999", "cwidth": 8, "textAlign": "right"}},
+                {"widgettype": "Text", "options": {"text": st, "cfontsize": 11, "color": sc, "cwidth": 6, "textAlign": "center"}},
+                {"widgettype": "Text", "options": {"text": f["created_at"], "cfontsize": 11, "color": "#999", "cwidth": 13, "textAlign": "center"}},
                 {
-                    "widgettype": "HBox",
-                    "options": {"spacing": "4px"},
+                    "widgettype": "HBox", "options": {"spacing": "6px"},
                     "subwidgets": [
-                        {
-                            "widgettype": "Text",
-                            "options": {"text": "👁", "cfontsize": 14, "css": "clickable", "color": "#4a90d9", "title": "查看"},
-                            "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
-                                "script": "window.open(" + json.dumps(file_url) + ",'_blank')"}]
-                        },
-                        {
-                            "widgettype": "Text",
-                            "options": {"text": "⬇", "cfontsize": 14, "css": "clickable", "color": "#50b86c", "title": "下载"},
-                            "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
-                                "script": "var a=document.createElement('a');a.href=" + json.dumps(file_url) + ";a.download='';document.body.appendChild(a);a.click();document.body.removeChild(a)"}]
-                        },
-                        {
-                            "widgettype": "Text",
-                            "options": {"text": "🗑", "cfontsize": 14, "css": "clickable", "color": "#f56c6c", "title": "删除"},
-                            "binds": [{
-                                "wid": "self", "event": "click",
-                                "actiontype": "urlwidget",
-                                "target": "file_list_panel",
-                                "mode": "replace",
-                                "options": {"url": del_url}
-                            }]
-                        }
-                    ]
-                }
-            ]
-        }
+                        {"widgettype": "Text", "options": {"text": "👁", "cfontsize": 14, "css": "clickable", "color": "#4a90d9", "title": "查看"},
+                         "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
+                             "script": "window.open(" + json.dumps(file_url) + ",'_blank')"}]},
+                        {"widgettype": "Text", "options": {"text": "⬇", "cfontsize": 14, "css": "clickable", "color": "#50b86c", "title": "下载"},
+                         "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
+                             "script": "var a=document.createElement('a');a.href=" + json.dumps(file_url) + ";a.download='';document.body.appendChild(a);a.click();document.body.removeChild(a)"}]},
+                        {"widgettype": "Text", "options": {"text": "🗑", "cfontsize": 14, "css": "clickable", "color": "#f56c6c", "title": "删除"},
+                         "binds": [{"wid": "self", "event": "click", "actiontype": "urlwidget", "target": "file_list_panel", "mode": "replace",
+                             "options": {"url": del_url}}]}
+                    ]}
+            ]}
         file_widgets.append(row)
 
-result = {
-    "widgettype": "VBox",
-    "options": {"width": "100%", "spacing": "0"},
-    "subwidgets": file_widgets
-}
+result = {"widgettype": "VBox", "options": {"width": "100%", "spacing": "0"}, "subwidgets": file_widgets}
 return result
