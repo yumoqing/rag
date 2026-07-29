@@ -1,0 +1,120 @@
+ns = params_kw.copy()
+kb_id = ns.get('kb_id', '')
+folder_id = ns.get('id', '')
+folder_label = ns.get('label', '全部文件')
+if folder_id == '__root__':
+    folder_id = ''
+    folder_label = '根目录'
+
+db = DBPools()
+dbname = get_module_dbname('rag')
+
+rows = []
+async with db.sqlorContext(dbname) as sor:
+    if folder_id:
+        recs = await sor.sqlExe(
+            "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND folder_id=${folder_id}$ ORDER BY created_at DESC",
+            {"kb_id": kb_id, "folder_id": folder_id})
+    else:
+        recs = await sor.sqlExe(
+            "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND (folder_id IS NULL OR folder_id='') ORDER BY created_at DESC",
+            {"kb_id": kb_id})
+    for r in recs:
+        rows.append({
+            "id": r.id,
+            "file_name": r.file_name,
+            "file_type": r.file_type or '',
+            "file_size": r.file_size or 0,
+            "file_path": r.file_path or '',
+            "status": r.status or '',
+            "chunk_count": r.chunk_count or 0,
+            "created_at": str(r.created_at)[:16] if r.created_at else ''
+        })
+
+def fmt_size(sz):
+    if sz < 1024:
+        return str(sz) + "B"
+    elif sz < 1024*1024:
+        return str(round(sz/1024, 1)) + "KB"
+    else:
+        return str(round(sz/(1024*1024), 1)) + "MB"
+
+header = {
+    "widgettype": "HBox",
+    "options": {"width": "100%", "padding": "10px 0", "borderBottom": "1px solid #e0e0e0", "alignItems": "center"},
+    "subwidgets": [
+        {"widgettype": "Text", "options": {"text": "📄 " + folder_label, "cfontsize": 14, "fontWeight": "bold", "color": "#333"}},
+        {"widgettype": "Text", "options": {"text": "（" + str(len(rows)) + " 个文件）", "cfontsize": 12, "color": "#999", "marginLeft": "8px"}},
+        {"widgettype": "Text", "options": {"text": "", "css": "filler"}}
+    ]
+}
+
+file_widgets = [header]
+
+if not rows:
+    file_widgets.append({
+        "widgettype": "Text",
+        "options": {"text": "暂无文件", "cfontsize": 13, "color": "#aaa", "halign": "center", "marginTop": "40px"}
+    })
+else:
+    for f in rows:
+        sc = "#50b86c"
+        st = "已完成"
+        if f["status"] == "pending":
+            sc = "#e6a23c"
+            st = "处理中"
+        elif f["status"] == "error":
+            sc = "#f56c6c"
+            st = "失败"
+
+        file_url = entire_url(f["file_path"])
+        del_url = entire_url('./delete_file.dspy') + "?kb_id=" + kb_id + "&doc_id=" + f["id"] + "&folder_id=" + folder_id + "&folder_label=" + folder_label
+
+        row = {
+            "widgettype": "HBox",
+            "options": {"width": "100%", "padding": "8px 12px", "borderBottom": "1px solid #f0f0f0", "alignItems": "center"},
+            "subwidgets": [
+                {"widgettype": "Text", "options": {"text": "📄 " + f["file_name"], "cfontsize": 13, "color": "#333", "textAlign": "left", "css": "filler"}},
+                {"widgettype": "Text", "options": {"text": f["file_type"].upper(), "cfontsize": 11, "color": "#999", "marginRight": "8px", "cwidth": 5, "textAlign": "center"}},
+                {"widgettype": "Text", "options": {"text": fmt_size(f["file_size"]), "cfontsize": 11, "color": "#999", "marginRight": "8px", "cwidth": 8, "textAlign": "right"}},
+                {"widgettype": "Text", "options": {"text": st, "cfontsize": 11, "color": sc, "marginRight": "8px", "cwidth": 6, "textAlign": "center"}},
+                {"widgettype": "Text", "options": {"text": f["created_at"], "cfontsize": 11, "color": "#999", "marginRight": "8px", "cwidth": 12}},
+                {
+                    "widgettype": "HBox",
+                    "options": {"spacing": "4px"},
+                    "subwidgets": [
+                        {
+                            "widgettype": "Text",
+                            "options": {"text": "👁", "cfontsize": 14, "css": "clickable", "color": "#4a90d9", "title": "查看"},
+                            "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
+                                "script": "window.open(" + json.dumps(file_url) + ",'_blank')"}]
+                        },
+                        {
+                            "widgettype": "Text",
+                            "options": {"text": "⬇", "cfontsize": 14, "css": "clickable", "color": "#50b86c", "title": "下载"},
+                            "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
+                                "script": "var a=document.createElement('a');a.href=" + json.dumps(file_url) + ";a.download='';document.body.appendChild(a);a.click();document.body.removeChild(a)"}]
+                        },
+                        {
+                            "widgettype": "Text",
+                            "options": {"text": "🗑", "cfontsize": 14, "css": "clickable", "color": "#f56c6c", "title": "删除"},
+                            "binds": [{
+                                "wid": "self", "event": "click",
+                                "actiontype": "urlwidget",
+                                "target": "file_list_panel",
+                                "mode": "replace",
+                                "options": {"url": del_url}
+                            }]
+                        }
+                    ]
+                }
+            ]
+        }
+        file_widgets.append(row)
+
+result = {
+    "widgettype": "VBox",
+    "options": {"width": "100%", "spacing": "0"},
+    "subwidgets": file_widgets
+}
+return result
