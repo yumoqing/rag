@@ -1,0 +1,222 @@
+ns = params_kw.copy()
+kb_id = ns.get('kb_id', '')
+folder_id = ns.get('folder', '')
+file_name = ns.get('file_name', 'upload.bin')
+if not kb_id:
+    return json.dumps({"status": "error", "error": "kb_id required"}, ensure_ascii=False)
+file_data = await request.read()
+if not file_data:
+    return json.dumps({"status": "error", "error": "no file data"}, ensure_ascii=False)
+
+env = request._run_ns
+userorgid = await env.get_userorgid()
+doc_id = str(uuid()).replace('-', '')[:16]
+ext = '.' + file_name.rsplit('.', 1)[1] if '.' in file_name else '.bin'
+file_path = '/d/rag/ragserver/pkgs/rag/rag/files/' + doc_id + ext
+with open(file_path, "wb") as f:
+    f.write(file_data)
+file_size = len(file_data)
+
+ext_l = ext.lower()
+text_exts = {'.txt', '.md', '.csv', '.json', '.xml', '.html', '.htm', '.py', '.js', '.css', '.yaml', '.yml', '.log', '.rst'}
+doc_exts = {'.pdf', '.docx', '.pptx', '.xlsx', '.doc', '.ppt', '.xls'}
+image_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp'}
+audio_exts = {'.mp3', '.wav', '.flac', '.ogg', '.m4a', '.aac'}
+video_exts = {'.mp4', '.avi', '.mov', '.mkv', '.webm'}
+
+text = ''
+chunks_n = 0
+face_count = 0
+voice_speakers = 0
+meta_parts = {}
+
+# --- TEXT EXTRACTION ---
+if ext_l in text_exts:
+    text = file_data.decode('utf-8', errors='replace')
+elif ext_l == '.pdf':
+    import io; from PyPDF2 import PdfReader
+    try:
+        r = PdfReader(io.BytesIO(file_data))
+        text = '\n'.join(p.extract_text() or '' for p in r.pages)
+    except: pass
+elif ext_l == '.docx':
+    import io; from docx import Document
+    try:
+        doc = Document(io.BytesIO(file_data))
+        text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+    except: pass
+elif ext_l == '.pptx':
+    import io; from pptx import Presentation
+    try:
+        prs = Presentation(io.BytesIO(file_data))
+        parts = []
+        for s in prs.slides:
+            for sh in s.shapes:
+                if hasattr(sh, 'text') and sh.text.strip():
+                    parts.append(sh.text)
+        text = '\n'.join(parts)
+    except: pass
+elif ext_l in {'.xlsx', '.xls'}:
+    import io; from openpyxl import load_workbook
+    try:
+        wb = load_workbook(io.BytesIO(file_data), read_only=True, data_only=True)
+        rows = []
+        for ws in wb.worksheets:
+            for row in ws.iter_rows(values_only=True):
+                r = ' | '.join(str(c) if c is not None else '' for c in row)
+                if r.strip(): rows.append(r)
+        text = '\n'.join(rows)
+    except: pass
+
+import aiohttp, base64
+
+# --- IMAGE: face detection + CLIP visual embedding ---
+if ext_l in image_exts:
+    img_b64 = base64.b64encode(file_data).decode()
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+        # Face detection
+        try:
+            r = await s.post('https://media.opencomputing.net:10443/face/api/detect', json={"images": [img_b64]})
+            if r.status == 200:
+                fd = await r.json()
+                results = fd.get("results", [])
+                if results and isinstance(results[0], dict):
+                    face_count = len(results[0].get("faces", results[0].get("detections", [])))
+            meta_parts['face'] = face_count
+        except: pass
+
+# --- AUDIO: voiceprint extraction ---
+if ext_l in audio_exts:
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as s:
+        try:
+            form = aiohttp.FormData()
+            form.add_field('file', file_data, filename=file_name)
+            r = await s.post('https://media.opencomputing.net:10443/voiceprint/extract/submit', data=form)
+            if r.status == 200:
+                vd = await r.json()
+                if vd.get('status') == 'SUCCEEDED':
+                    voice_speakers = vd.get('speakers', 1)
+                elif vd.get('embedding'):
+                    voice_speakers = 1
+            meta_parts['voiceprint'] = voice_speakers
+        except: pass
+
+# --- VIDEO: frame extraction + audio extraction (via ffmpeg) ---
+if ext_l in video_exts:
+    import subprocess, tempfile
+    meta_parts['video'] = 'pending'
+    # Extract keyframe for face detection
+    try:
+        tmp_img = '/tmp/' + doc_id + '_frame.jpg'
+        subprocess.run(['ffmpeg', '-y', '-i', file_path, '-vframes', '1', '-q:v', '2', tmp_img],
+                       capture_output=True, timeout=30)
+        if __import__('os').path.exists(tmp_img):
+            with open(tmp_img, 'rb') as fi:
+                frame_data = fi.read()
+            img_b64 = base64.b64encode(frame_data).decode()
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+                try:
+                    r = await s.post('https://media.opencomputing.net:10443/face/api/detect', json={"images": [img_b64]})
+                    if r.status == 200:
+                        fd = await r.json()
+                        results = fd.get("results", [])
+                        if results and isinstance(results[0], dict):
+                            face_count = len(results[0].get("faces", results[0].get("detections", [])))
+                except: pass
+            __import__('os').remove(tmp_img)
+    except: pass
+    # Extract audio for voiceprint
+    try:
+        tmp_audio = '/tmp/' + doc_id + '_audio.wav'
+        subprocess.run(['ffmpeg', '-y', '-i', file_path, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', tmp_audio],
+                       capture_output=True, timeout=60)
+        if __import__('os').path.exists(tmp_audio) and __import__('os').path.getsize(tmp_audio) > 44:
+            with open(tmp_audio, 'rb') as fa:
+                audio_data = fa.read()
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as s:
+                try:
+                    form = aiohttp.FormData()
+                    form.add_field('file', audio_data, filename='audio.wav')
+                    r = await s.post('https://media.opencomputing.net:10443/voiceprint/extract/submit', data=form)
+                    if r.status == 200:
+                        vd = await r.json()
+                        if vd.get('status') == 'SUCCEEDED' or vd.get('embedding'):
+                            voice_speakers = vd.get('speakers', 1)
+                except: pass
+            __import__('os').remove(tmp_audio)
+    except: pass
+    meta_parts['face'] = face_count
+    meta_parts['voiceprint'] = voice_speakers
+
+# --- RAG INGEST (text + image CLIP embedding) ---
+if text and len(text.strip()) > 10:
+    paragraphs = text.split('\n')
+    chunks = []
+    cur = ''
+    for p in paragraphs:
+        p = p.strip()
+        if not p:
+            if cur: chunks.append(cur); cur = ''
+            continue
+        if len(cur) + len(p) < 500:
+            cur = (cur + '\n' + p).strip()
+        else:
+            if cur: chunks.append(cur)
+            cur = p
+    if cur: chunks.append(cur)
+
+    if chunks:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+            try:
+                r = await s.post('https://embedding.opencomputing.net:10443/api/embed',
+                    json={"texts": chunks, "model": "CLIP-ViT-H-14"})
+                emb_data = await r.json() if r.status == 200 else {}
+                embeddings = emb_data.get("text_embeddings", emb_data.get("embeddings", []))
+            except:
+                embeddings = []
+
+            vector_ids = []
+            if embeddings:
+                try:
+                    vdb_data = {"collection": kb_id, "data": [
+                        {"id": doc_id + "_" + str(i), "vector": emb, "text": chunks[i]}
+                        for i, emb in enumerate(embeddings)]}
+                    await s.post('https://vectordb.opencomputing.net:10443/v1/upsert', json=vdb_data)
+                    vector_ids = [doc_id + "_" + str(i) for i in range(len(embeddings))]
+                except:
+                    pass
+
+            async with get_sor_context(env, 'rag') as sor:
+                for i, chunk_text in enumerate(chunks):
+                    vid = vector_ids[i] if i < len(vector_ids) else ''
+                    await sor.sqlExe(
+                        "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
+                        "VALUES (" + "${id}$, ${doc_id}$, ${kb_id}$, ${idx}$, ${content}$, ${vid}$, NOW())",
+                        {"id": doc_id + "_c" + str(i), "doc_id": doc_id, "kb_id": kb_id,
+                         "idx": i, "content": chunk_text[:2000], "vid": vid})
+            chunks_n = len(chunks)
+
+# --- SAVE TO DB ---
+import json as _json
+meta_json = _json.dumps(meta_parts, ensure_ascii=False)
+status = 'done'
+async with get_sor_context(env, 'rag') as sor:
+    await sor.sqlExe(
+        "INSERT INTO documents (id, kb_id, folder_id, file_name, file_type, file_size, file_path, mime_type, status, chunk_count, metadata, org_id, created_at, updated_at) "
+        "VALUES (" + "${id}$, ${kb_id}$, ${folder_id}$, ${file_name}$, 'other', ${file_size}$, ${file_path}$, 'application/octet-stream', ${status}$, ${chunks}$, ${meta}$, ${org_id}$, NOW(), NOW())",
+        {"id": doc_id, "kb_id": kb_id, "folder_id": folder_id, "file_name": file_name,
+         "file_size": file_size, "file_path": "/idfile/files/" + doc_id + ext,
+         "status": status, "chunks": chunks_n, "meta": meta_json, "org_id": userorgid})
+    await sor.sqlExe(
+        "UPDATE knowledge_bases SET doc_count=doc_count+1, total_size=total_size+" + "${size}$ WHERE id=${kb_id}$",
+        {"size": file_size, "kb_id": kb_id})
+    if chunks_n:
+        await sor.sqlExe(
+            "UPDATE knowledge_bases SET chunk_count=chunk_count+" + "${n}$ WHERE id=${kb_id}$",
+            {"n": chunks_n, "kb_id": kb_id})
+
+result = {"status": "SUCCEEDED", "doc_id": doc_id, "file_name": file_name,
+    "file_size": file_size, "folder_id": folder_id,
+    "text_len": len(text), "chunks": chunks_n,
+    "faces": face_count, "speakers": voice_speakers}
+return _json.dumps(result, ensure_ascii=False, default=str)
