@@ -1,0 +1,6 @@
+import json
+env = request._run_ns
+async with get_sor_context(env, 'rag') as sor:
+    recs = await sor.sqlExe("SELECT id, name FROM knowledge_bases WHERE org_id IS NULL OR org_id='0' ORDER BY created_at DESC", {})
+    items = [{"value": r.id, "text": r.name} for r in recs]
+    return json.dumps(items, ensure_ascii=False)

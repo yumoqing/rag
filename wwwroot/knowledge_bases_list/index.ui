@@ -9,28 +9,127 @@
     "subwidgets": [
         {
             "widgettype": "HBox",
-            "options": {"width": "100%", "justifyContent": "space-between", "alignItems": "center"},
+            "options": {
+                "width": "100%",
+                "justifyContent": "space-between",
+                "alignItems": "center"
+            },
             "subwidgets": [
-                {"widgettype": "Text", "options": {"text": "知识库", "cfontsize": 22, "fontWeight": "bold", "color": "#333"}},
-                {"widgettype": "Button", "options": {"label": "+ 新建知识库", "bgcolor": "#4a90d9", "color": "#fff"}, "binds": [
-                    {"wid": "self", "event": "click", "actiontype": "urlwidget",
-                     "target": "Popup",
-                     "popup_options": {"auto_dismiss": true},
-                     "options": {"url": "{{entire_url('/knowledge_bases_list/new_kb_form.ui')}}"}}
-                ]}
+                {
+                    "widgettype": "Text",
+                    "options": {
+                        "text": "知识库",
+                        "cfontsize": 22,
+                        "fontWeight": "bold",
+                        "color": "#333"
+                    }
+                },
+                {
+                    "widgettype": "HBox",
+                    "options": {
+                        "spacing": "8px"
+                    },
+                    "subwidgets": [
+                        {
+                            "widgettype": "Button",
+                            "options": {
+                                "label": "🔍 检索知识",
+                                "bgcolor": "#10b981",
+                                "color": "#fff"
+                            },
+                            "binds": [
+                                {
+                                    "wid": "self",
+                                    "event": "click",
+                                    "actiontype": "urlwidget",
+                                    "target": "app.rag_main_content",
+                                    "mode": "replace",
+                                    "options": {
+                                        "url": "./search.ui"
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "widgettype": "Button",
+                            "options": {
+                                "label": "+ 新建知识库",
+                                "bgcolor": "#4a90d9",
+                                "color": "#fff"
+                            },
+                            "binds": [
+                                {
+                                    "wid": "self",
+                                    "event": "click",
+                                    "actiontype": "urlwidget",
+                                    "target": "Popup",
+                                    "popup_options": {
+                                        "auto_dismiss": true
+                                    },
+                                    "options": {
+                                        "url": "{{entire_url('/knowledge_bases_list/new_kb_form.ui')}}"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
             ]
         },
         {
             "widgettype": "VBox",
-            "options": {"width": "100%", "bgcolor": "#f8f9fa", "padding": "16px", "css": "card", "spacing": "4px"},
+            "options": {
+                "width": "100%",
+                "bgcolor": "#f8f9fa",
+                "padding": "16px",
+                "css": "card",
+                "spacing": "4px"
+            },
             "subwidgets": [
-                {"widgettype": "HBox", "options": {"width": "100%", "justifyContent": "space-between"}, "subwidgets": [
-                    {"widgettype": "Text", "options": {"text": "💾 存储容量", "cfontsize": 14, "fontWeight": "bold", "color": "#333"}},
-                    {"widgettype": "Text", "options": {"text": "已用 0MB / 总计 100MB", "cfontsize": 12, "color": "#888"}}
-                ]},
-                {"widgettype": "VBox", "options": {"width": "100%", "cheight": 0.5, "bgcolor": "#e0e0e0", "css": ""}, "subwidgets": [
-                    {"widgettype": "VBox", "options": {"cwidth": 0, "cheight": 0.5, "bgcolor": "#4a90d9", "css": ""}}
-                ]}
+                {
+                    "widgettype": "HBox",
+                    "options": {
+                        "width": "100%",
+                        "justifyContent": "space-between"
+                    },
+                    "subwidgets": [
+                        {
+                            "widgettype": "Text",
+                            "options": {
+                                "text": "💾 存储容量",
+                                "cfontsize": 14,
+                                "fontWeight": "bold",
+                                "color": "#333"
+                            }
+                        },
+                        {
+                            "widgettype": "Text",
+                            "options": {
+                                "text": "已用 0MB / 总计 100MB",
+                                "cfontsize": 12,
+                                "color": "#888"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "widgettype": "VBox",
+                    "options": {
+                        "width": "100%",
+                        "cheight": 0.5,
+                        "bgcolor": "#e0e0e0"
+                    },
+                    "subwidgets": [
+                        {
+                            "widgettype": "VBox",
+                            "options": {
+                                "cwidth": 0,
+                                "cheight": 0.5,
+                                "bgcolor": "#4a90d9"
+                            }
+                        }
+                    ]
+                }
             ]
         },
         {
