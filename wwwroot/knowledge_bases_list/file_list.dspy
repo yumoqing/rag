@@ -64,6 +64,7 @@ else:
         elif f["status"] == "error": sc = "#f56c6c"; st = "失败"
 
         file_url = f["file_path"]
+        del_url = entire_url("./delete_file.dspy") + "?kb_id=" + kb_id + "&doc_id=" + f["id"] + "&folder_id=" + folder_id + "&folder_label=" + folder_label
         display_name = trunc_name(f["file_name"])
 
         row = {
