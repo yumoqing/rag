@@ -32,7 +32,7 @@ try:
                 "created_at": str(r.created_at)[:16] if r.created_at else ''
             })
 except:
-    return json.dumps({"widgettype": "Text", "options": {"text": "加载文件列表失败", "cfontsize": 14, "color": "#e74c3c", "halign": "center", "marginTop": "40px"}}, ensure_ascii=False)
+    return {"widgettype": "Text", "options": {"text": "加载文件列表失败", "cfontsize": 14, "color": "#e74c3c", "halign": "center", "marginTop": "40px"}}
 
 def fmt_size(sz):
     if sz < 1024: return str(sz) + "B"
@@ -81,10 +81,10 @@ else:
                     "cwidth": 28, "halign": "left", "overflow": "hidden",
                     "title": f["file_name"]
                 }},
-                {"widgettype": "Text", "options": {"text": f["file_type"].upper(), "cfontsize": 11, "color": "#999", "cwidth": 5, "textAlign": "center"}},
-                {"widgettype": "Text", "options": {"text": fmt_size(f["file_size"]), "cfontsize": 11, "color": "#999", "cwidth": 8, "textAlign": "right"}},
-                {"widgettype": "Text", "options": {"text": st, "cfontsize": 11, "color": sc, "cwidth": 6, "textAlign": "center"}},
-                {"widgettype": "Text", "options": {"text": f["created_at"], "cfontsize": 11, "color": "#999", "cwidth": 13, "textAlign": "center"}},
+                {"widgettype": "Text", "options": {"text": f["file_type"].upper(), "cfontsize": 11, "color": "#999", "cwidth": 5, "halign": "center"}},
+                {"widgettype": "Text", "options": {"text": fmt_size(f["file_size"]), "cfontsize": 11, "color": "#999", "cwidth": 8, "halign": "right"}},
+                {"widgettype": "Text", "options": {"text": st, "cfontsize": 11, "color": sc, "cwidth": 6, "halign": "center"}},
+                {"widgettype": "Text", "options": {"text": f["created_at"], "cfontsize": 11, "color": "#999", "cwidth": 13, "halign": "center"}},
                 {
                     "widgettype": "HBox", "options": {"spacing": "6px"},
                     "subwidgets": [
