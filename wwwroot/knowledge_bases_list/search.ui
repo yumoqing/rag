@@ -3,7 +3,7 @@
     "options": {"padding": "20px", "spacing": "16px", "width": "100%"},
     "subwidgets": [
         {"widgettype": "Text", "options": {"text": "🔍 知识检索", "cfontsize": 22, "fontWeight": "bold", "color": "#1a1a2e"}},
-        {"widgettype": "Text", "options": {"text": "输入文本或上传文件，检索相关内容", "cfontsize": 13, "color": "#888"}},
+        {"widgettype": "Text", "options": {"text": "选择知识库，输入文字或上传文件检索", "cfontsize": 13, "color": "#888"}},
         {
             "widgettype": "HBox",
             "options": {"spacing": "12px", "alignItems": "center"},
@@ -22,7 +22,7 @@
                 {
                     "widgettype": "UiFile",
                     "id": "search_file",
-                    "options": {"accept": "", "multiple": false, "preview": false, "otext": "📎 上传文件检索", "cwidth": 12, "cheight": 3, "css": "card", "border": "1px dashed #ccc"}
+                    "options": {"accept": "", "multiple": false, "preview": false, "otext": "📎 文件检索", "cwidth": 10, "cheight": 3, "css": "card", "border": "1px dashed #ccc"}
                 }
             ]
         },
@@ -39,18 +39,15 @@
         {
             "wid": "search_bar",
             "event": "search",
-            "actiontype": "urlwidget",
-            "target": "search_results",
-            "mode": "replace",
-            "datawidget": "kb_selector",
-            "options": {"url": "{{entire_url('./search_result.dspy')}}"}
+            "actiontype": "script",
+            "script": "var kw=event.params.keyword||'';var kb=bricks.getWidgetById('kb_selector',bricks.app.root);var kb_id=kb?kb.getValue()||'':'all';var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&keyword='+encodeURIComponent(kw);bricks.buildUrlwidgetHandler({url:u},bricks.getWidgetById('search_results',bricks.app.root),'replace')"
         },
         {
             "wid": "search_file",
             "event": "changed",
             "actiontype": "script",
             "target": "search_file",
-            "script": "var f=this.value;if(!f)return;if(Array.isArray(f))f=f[0];if(!f)return;var kb=document.querySelector('[id=kb_selector]');var kb_id=kb?kb.value||'':'all';var fd=new FormData();fd.append('file',f);var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&file_name='+encodeURIComponent(f.name);fetch(u,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('search_results',bricks.app.root);if(fp)fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})})"
+            "script": "var f=this.value;if(!f)return;if(Array.isArray(f))f=f[0];if(!f)return;var kb=bricks.getWidgetById('kb_selector',bricks.app.root);var kb_id=kb?kb.getValue()||'':'all';var fd=new FormData();fd.append('file',f);var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&file_name='+encodeURIComponent(f.name);fetch(u,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('search_results',bricks.app.root);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"
         }
     ]
 }
