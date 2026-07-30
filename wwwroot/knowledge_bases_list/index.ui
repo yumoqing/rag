@@ -77,60 +77,10 @@
             ]
         },
         {
-            "widgettype": "VBox",
+            "widgettype": "urlwidget",
             "options": {
-                "width": "100%",
-                "bgcolor": "#f8f9fa",
-                "padding": "16px",
-                "css": "card",
-                "spacing": "4px"
-            },
-            "subwidgets": [
-                {
-                    "widgettype": "HBox",
-                    "options": {
-                        "width": "100%",
-                        "justifyContent": "space-between"
-                    },
-                    "subwidgets": [
-                        {
-                            "widgettype": "Text",
-                            "options": {
-                                "text": "💾 存储容量",
-                                "cfontsize": 14,
-                                "fontWeight": "bold",
-                                "color": "#333"
-                            }
-                        },
-                        {
-                            "widgettype": "Text",
-                            "options": {
-                                "text": "已用 0MB / 总计 100MB",
-                                "cfontsize": 12,
-                                "color": "#888"
-                            }
-                        }
-                    ]
-                },
-                {
-                    "widgettype": "VBox",
-                    "options": {
-                        "width": "100%",
-                        "cheight": 0.5,
-                        "bgcolor": "#e0e0e0"
-                    },
-                    "subwidgets": [
-                        {
-                            "widgettype": "VBox",
-                            "options": {
-                                "cwidth": 0,
-                                "cheight": 0.5,
-                                "bgcolor": "#4a90d9"
-                            }
-                        }
-                    ]
-                }
-            ]
+                "url": "{{entire_url('./storage_stats.dspy')}}"
+            }
         },
         {
             "widgettype": "urlwidget",

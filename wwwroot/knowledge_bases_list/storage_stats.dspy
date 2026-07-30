@@ -1,0 +1,40 @@
+ns = params_kw.copy()
+env = request._run_ns
+
+async with get_sor_context(env, 'rag') as sor:
+    kb_id = ns.get('kb_id', '')
+    if kb_id:
+        recs = await sor.sqlExe("SELECT doc_count, total_size, chunk_count FROM knowledge_bases WHERE id=${id}$", {"id": kb_id})
+    else:
+        recs = await sor.sqlExe("SELECT COALESCE(SUM(doc_count),0) AS doc_count, COALESCE(SUM(total_size),0) AS total_size, COALESCE(SUM(chunk_count),0) AS chunk_count FROM knowledge_bases", {})
+
+    if recs:
+        r = recs[0]
+        docs = r.doc_count or 0
+        size = r.total_size or 0
+        chunks = r.chunk_count or 0
+    else:
+        docs = 0
+        size = 0
+        chunks = 0
+
+def fmt(sz):
+    if sz < 1024: return str(sz) + 'B'
+    elif sz < 1024*1024: return str(round(sz/1024,1)) + 'KB'
+    else: return str(round(sz/(1024*1024),1)) + 'MB'
+
+pct = min(round(size / (100*1024*1024) * 100, 1), 100) if size > 0 else 0
+
+return json.dumps({
+    "widgettype": "VBox",
+    "options": {"width": "100%", "bgcolor": "#f8f9fa", "padding": "16px", "css": "card", "spacing": "4px"},
+    "subwidgets": [
+        {"widgettype": "HBox", "options": {"width": "100%", "justifyContent": "space-between"}, "subwidgets": [
+            {"widgettype": "Text", "options": {"text": "💾 存储容量", "cfontsize": 14, "fontWeight": "bold", "color": "#333"}},
+            {"widgettype": "Text", "options": {"text": f"已用 {fmt(size)} / 总计 100MB  |  {docs} 文档  {chunks} 块", "cfontsize": 12, "color": "#888"}}
+        ]},
+        {"widgettype": "VBox", "options": {"width": "100%", "cheight": 0.5, "bgcolor": "#e0e0e0"}, "subwidgets": [
+            {"widgettype": "VBox", "options": {"cwidth": pct, "cheight": 0.5, "bgcolor": "#4a90d9"}}
+        ]}
+    ]
+}, ensure_ascii=False)
