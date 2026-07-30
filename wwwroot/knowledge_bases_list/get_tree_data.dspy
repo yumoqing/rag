@@ -3,18 +3,21 @@ id = ns.get('id')
 kb_id = ns.get('kb_id', '')
 db = DBPools()
 dbname = get_module_dbname('rag')
-async with db.sqlorContext(dbname) as sor:
-    if not id:
-        recs = await sor.sqlExe(
-            "SELECT id, '' as parentid, content as label FROM document_chunks WHERE kb_id=${kb_id}$ AND chunk_type='directory' AND (description IS NULL OR description='') ORDER BY content",
-            {"kb_id": kb_id})
-        result = [{"id": "__root__", "parentid": "", "label": "📁 根目录"}]
-        for r in recs:
-            result.append({"id": r.id, "parentid": r.parentid, "label": r.label})
-        return result
-    else:
-        recs = await sor.sqlExe(
-            "SELECT id, description as parentid, content as label FROM document_chunks WHERE kb_id=${kb_id}$ AND chunk_type='directory' AND description=${id}$ ORDER BY content",
-            {"kb_id": kb_id, "id": id})
-        return [dict(r) for r in recs]
+try:
+    async with db.sqlorContext(dbname) as sor:
+        if not id:
+            recs = await sor.sqlExe(
+                "SELECT id, '' as parentid, content as label FROM document_chunks WHERE kb_id=${kb_id}$ AND chunk_type='directory' AND (description IS NULL OR description='') ORDER BY content",
+                {"kb_id": kb_id})
+            result = [{"id": "__root__", "parentid": "", "label": "📁 根目录"}]
+            for r in recs:
+                result.append({"id": r.id, "parentid": r.parentid, "label": r.label})
+            return result
+        else:
+            recs = await sor.sqlExe(
+                "SELECT id, description as parentid, content as label FROM document_chunks WHERE kb_id=${kb_id}$ AND chunk_type='directory' AND description=${id}$ ORDER BY content",
+                {"kb_id": kb_id, "id": id})
+            return [dict(r) for r in recs]
+except:
+    return [{"id": "__root__", "parentid": "", "label": "📁 根目录（加载失败）"}]
 return []

@@ -10,26 +10,29 @@ db = DBPools()
 dbname = get_module_dbname('rag')
 
 rows = []
-async with db.sqlorContext(dbname) as sor:
-    if folder_id:
-        recs = await sor.sqlExe(
-            "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND folder_id=${folder_id}$ ORDER BY created_at DESC",
-            {"kb_id": kb_id, "folder_id": folder_id})
-    else:
-        recs = await sor.sqlExe(
-            "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND (folder_id IS NULL OR folder_id='') ORDER BY created_at DESC",
-            {"kb_id": kb_id})
-    for r in recs:
-        rows.append({
-            "id": r.id,
-            "file_name": r.file_name,
-            "file_type": r.file_type or '',
-            "file_size": r.file_size or 0,
-            "file_path": r.file_path or '',
-            "status": r.status or '',
-            "chunk_count": r.chunk_count or 0,
-            "created_at": str(r.created_at)[:16] if r.created_at else ''
-        })
+try:
+    async with db.sqlorContext(dbname) as sor:
+        if folder_id:
+            recs = await sor.sqlExe(
+                "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND folder_id=${folder_id}$ ORDER BY created_at DESC",
+                {"kb_id": kb_id, "folder_id": folder_id})
+        else:
+            recs = await sor.sqlExe(
+                "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND (folder_id IS NULL OR folder_id='') ORDER BY created_at DESC",
+                {"kb_id": kb_id})
+        for r in recs:
+            rows.append({
+                "id": r.id,
+                "file_name": r.file_name,
+                "file_type": r.file_type or '',
+                "file_size": r.file_size or 0,
+                "file_path": r.file_path or '',
+                "status": r.status or '',
+                "chunk_count": r.chunk_count or 0,
+                "created_at": str(r.created_at)[:16] if r.created_at else ''
+            })
+except:
+    return json.dumps({"widgettype": "Text", "options": {"text": "加载文件列表失败", "cfontsize": 14, "color": "#e74c3c", "halign": "center", "marginTop": "40px"}}, ensure_ascii=False)
 
 def fmt_size(sz):
     if sz < 1024: return str(sz) + "B"
