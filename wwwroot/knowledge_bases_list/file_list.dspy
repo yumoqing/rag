@@ -18,7 +18,7 @@ try:
                 {"kb_id": kb_id, "folder_id": folder_id})
         else:
             recs = await sor.sqlExe(
-                "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND (folder_id IS NULL OR folder_id='') ORDER BY created_at DESC",
+                "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND (folder_id IS NULL OR folder_id IN ('','__root__')) ORDER BY created_at DESC",
                 {"kb_id": kb_id})
         for r in recs:
             rows.append({
