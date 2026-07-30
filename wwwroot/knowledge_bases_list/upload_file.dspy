@@ -12,15 +12,9 @@ if not file_data:
 env = request._run_ns
 userorgid = await env.get_userorgid()
 
-# Use FileStorage for proper hashed path
-from ahserver.filestorage import FileStorage
-fs = FileStorage()
-real_path = fs._name2path(file_name)
-with open(real_path, "wb") as f:
-    f.write(file_data)
-web_path = fs.webpath(real_path)  # e.g. /idfile/191/193/197/97/xxx.txt
-if not web_path.startswith('/'):
-    web_path = '/' + web_path
+# Save file via FileStorage (returns web path e.g. /idfile/191/193/197/97/xxx.txt)
+web_path = await env.save_file(file_data, file_name)
+real_path = env.realpath(web_path)
 
 doc_id = str(uuid()).replace('-', '')[:16]
 file_size = len(file_data)
@@ -41,20 +35,6 @@ meta_parts = {}
 # --- TEXT EXTRACTION ---
 if ext_l in text_exts:
     text = file_data.decode('utf-8', errors='replace')
-elif ext_l == '.pdf':
-    import io; from PyPDF2 import PdfReader
-    try:
-        r = PdfReader(io.BytesIO(file_data))
-        text = '\n'.join(p.extract_text() or '' for p in r.pages)
-    except: pass
-elif ext_l == '.docx':
-    import io; from docx import Document
-    try:
-        doc = Document(io.BytesIO(file_data))
-        text = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
-    except: pass
-
-import aiohttp, base64
 
 # --- IMAGE: face detection ---
 if ext_l in image_exts:
@@ -79,16 +59,12 @@ if ext_l in audio_exts:
             r = await s.post('https://media.opencomputing.net/voiceprint/extract/submit', data=form)
             if r.status == 200:
                 vd = await r.json()
-                if vd.get('status') == 'SUCCEEDED':
-                    voice_speakers = vd.get('speakers', 1)
-                elif vd.get('embedding'):
-                    voice_speakers = 1
+                voice_speakers = vd.get('speakers', 1) if vd.get('status') == 'SUCCEEDED' else (1 if vd.get('embedding') else 0)
             meta_parts['voiceprint'] = voice_speakers
         except: pass
 
-# --- VIDEO: frame + audio extraction ---
+# --- VIDEO: frame extraction ---
 if ext_l in video_exts:
-    import subprocess
     meta_parts['video'] = 'pending'
     try:
         tmp_img = '/tmp/' + doc_id + '_frame.jpg'
@@ -159,8 +135,7 @@ if text and len(text.strip()) > 10:
             chunks_n = len(chunks)
 
 # --- SAVE TO DB ---
-import json as _json
-meta_json = _json.dumps(meta_parts, ensure_ascii=False)
+meta_json = json.dumps(meta_parts, ensure_ascii=False)
 status = 'done'
 async with get_sor_context(env, 'rag') as sor:
     await sor.sqlExe(
@@ -181,4 +156,4 @@ result = {"status": "SUCCEEDED", "doc_id": doc_id, "file_name": file_name,
     "file_size": file_size, "folder_id": folder_id,
     "text_len": len(text), "chunks": chunks_n,
     "faces": face_count, "speakers": voice_speakers}
-return _json.dumps(result, ensure_ascii=False, default=str)
+return json.dumps(result, ensure_ascii=False, default=str)

@@ -29,12 +29,10 @@ async with get_sor_context(env, 'rag') as sor:
         "UPDATE knowledge_bases SET doc_count=GREATEST(doc_count-1, 0), total_size=GREATEST(total_size-${size}$, 0) WHERE id=${kb_id}$",
         {"size": file_size, "kb_id": kb_id})
 
-# Delete physical file via FileStorage
+# Delete physical file via env.realpath
 if file_path and file_path.startswith("/idfile/"):
-    from ahserver.filestorage import FileStorage
-    fs = FileStorage()
     try:
-        real_path = fs.realPath(file_path)
+        real_path = env.realpath(file_path)
         if os.path.exists(real_path):
             os.remove(real_path)
     except Exception:
