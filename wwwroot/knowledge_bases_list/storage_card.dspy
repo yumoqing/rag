@@ -1,0 +1,23 @@
+ns = params_kw.copy()
+env = request._run_ns
+
+async with get_sor_context(env, 'rag') as sor:
+    rec = await sor.sqlExe("SELECT COALESCE(SUM(total_size),0) used FROM knowledge_bases", {})
+    used_bytes = int(rec[0].used) if rec else 0
+
+used_mb = round(used_bytes / 1048576, 1)
+pct = min(round(used_bytes / 104857600 * 100), 100) if used_bytes > 0 else 0
+
+return {
+    "widgettype": "VBox",
+    "options": {"width": "100%", "bgcolor": "#f8f9fa", "padding": "16px", "css": "card", "spacing": "4px"},
+    "subwidgets": [
+        {"widgettype": "HBox", "options": {"width": "100%", "justifyContent": "space-between"}, "subwidgets": [
+            {"widgettype": "Text", "options": {"text": "💾 存储容量", "cfontsize": 14, "fontWeight": "bold", "color": "#333"}},
+            {"widgettype": "Text", "options": {"text": "已用 " + str(used_mb) + "MB / 总计 100MB", "cfontsize": 12, "color": "#888"}}
+        ]},
+        {"widgettype": "VBox", "options": {"width": "100%", "cheight": 0.5, "bgcolor": "#e0e0e0"}, "subwidgets": [
+            {"widgettype": "VBox", "options": {"cwidth": pct, "cheight": 0.5, "bgcolor": "#4a90d9"}}
+        ]}
+    ]
+}
