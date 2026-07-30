@@ -93,7 +93,7 @@ else:
                              "script": "var a=document.createElement('a');a.href=" + json.dumps(file_url) + ";a.download='';document.body.appendChild(a);a.click();document.body.removeChild(a)"}]},
                         {"widgettype": "Text", "options": {"text": "🗑", "cfontsize": 14, "css": "clickable", "color": "#f56c6c", "title": "删除"},
                          "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
-                             "script": "if(!confirm('确认删除 ' + decodeURIComponent(" + json.dumps(f["file_name"]) + ") + ' ? 不可恢复'))return;fetch(" + json.dumps(del_url) + ").then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('file_list_panel',bricks.app.root);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"}]}
+                             "script": "if(!confirm('确认删除 ' + decodeURIComponent(" + json.dumps(f["file_name"]) + ") + ' ? 不可恢复'))return;fetch(" + json.dumps(del_url) + ").then(function(r){return r.json()}).then(function(){var u='/rag/knowledge_bases_list/file_list.dspy?_webbricks_=1&kb_id='+encodeURIComponent(" + json.dumps(kb_id) + ")+'&id='+encodeURIComponent(" + json.dumps(folder_id) + ")+'&label='+encodeURIComponent(" + json.dumps(folder_label) + ");fetch(u).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('file_list_panel',bricks.app.root);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})})"}]}
                     ]}
             ]}
         file_widgets.append(row)
