@@ -63,8 +63,7 @@ else:
         if f["status"] == "pending": sc = "#e6a23c"; st = "处理中"
         elif f["status"] == "error": sc = "#f56c6c"; st = "失败"
 
-        file_url = entire_url(f["file_path"])
-        del_url = entire_url('./delete_file.dspy') + "?kb_id=" + kb_id + "&doc_id=" + f["id"] + "&folder_id=" + folder_id + "&folder_label=" + folder_label
+        file_url = "/idfile/" + f["id"] + "." + f["file_name"].rsplit(".")[1] if "." in f["file_name"] else "/idfile/" + f["id"]
         display_name = trunc_name(f["file_name"])
 
         row = {
