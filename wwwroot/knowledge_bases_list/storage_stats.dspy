@@ -11,7 +11,7 @@ async with get_sor_context(env, 'rag') as sor:
     if recs:
         r = recs[0]
         docs = int(r.doc_count or 0)
-        size = r.total_size or 0
+        size = int(r.total_size or 0)
         chunks = int(r.chunk_count or 0)
     else:
         docs = 0
@@ -37,4 +37,4 @@ return json.dumps({
             {"widgettype": "VBox", "options": {"cwidth": pct, "cheight": 0.5, "bgcolor": "#4a90d9"}}
         ]}
     ]
-}, ensure_ascii=False)
+}, ensure_ascii=False, default=str)
