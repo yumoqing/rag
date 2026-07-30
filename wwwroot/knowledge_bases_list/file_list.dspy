@@ -64,7 +64,9 @@ else:
         elif f["status"] == "error": sc = "#f56c6c"; st = "失败"
 
         file_url = f["file_path"]
-        del_url = entire_url("./delete_file.dspy") + "?kb_id=" + kb_id + "&doc_id=" + f["id"] + "&folder_id=" + folder_id + "&folder_label=" + folder_label
+        if not file_url.startswith("/idfile"):
+            file_url = "/idfile" + file_url
+        del_url = "./delete_file.dspy?kb_id=" + kb_id + "&doc_id=" + f["id"] + "&folder_id=" + folder_id + "&folder_label=" + folder_label
         display_name = trunc_name(f["file_name"])
 
         row = {
@@ -73,7 +75,7 @@ else:
             "subwidgets": [
                 {"widgettype": "Text", "options": {
                     "text": "📄 " + display_name, "cfontsize": 13, "color": "#333",
-                    "cwidth": 28, "textAlign": "left", "overflow": "hidden",
+                    "cwidth": 0, "css": "filler", "halign": "left",
                     "title": f["file_name"]
                 }},
                 {"widgettype": "Text", "options": {"text": f["file_type"].upper(), "cfontsize": 11, "color": "#999", "cwidth": 5, "textAlign": "center"}},
@@ -90,8 +92,8 @@ else:
                          "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
                              "script": "var a=document.createElement('a');a.href=" + json.dumps(file_url) + ";a.download='';document.body.appendChild(a);a.click();document.body.removeChild(a)"}]},
                         {"widgettype": "Text", "options": {"text": "🗑", "cfontsize": 14, "css": "clickable", "color": "#f56c6c", "title": "删除"},
-                         "binds": [{"wid": "self", "event": "click", "actiontype": "urlwidget", "target": "file_list_panel", "mode": "replace",
-                             "options": {"url": del_url}}]}
+                         "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
+                             "script": "if(!confirm('确认删除 ' + decodeURIComponent(" + json.dumps(f["file_name"]) + ") + ' ? 不可恢复'))return;fetch(" + json.dumps(del_url) + ").then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('file_list_panel',bricks.app.root);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"}]}
                     ]}
             ]}
         file_widgets.append(row)
