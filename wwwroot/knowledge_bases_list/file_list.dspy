@@ -66,7 +66,7 @@ else:
         file_url = f["file_path"]
         if not file_url.startswith("/idfile"):
             file_url = "/idfile" + file_url
-        del_url = "./delete_file.dspy?kb_id=" + kb_id + "&doc_id=" + f["id"] + "&folder_id=" + folder_id + "&folder_label=" + folder_label
+        del_url = "/rag/knowledge_bases_list/delete_file.dspy?_webbricks_=1&kb_id=" + kb_id + "&doc_id=" + f["id"] + "&folder_id=" + folder_id + "&folder_label=" + folder_label
         display_name = trunc_name(f["file_name"])
 
         row = {
@@ -75,7 +75,7 @@ else:
             "subwidgets": [
                 {"widgettype": "Text", "options": {
                     "text": "📄 " + display_name, "cfontsize": 13, "color": "#333",
-                    "cwidth": 0, "css": "filler", "halign": "left",
+                    "cwidth": 28, "halign": "left", "overflow": "hidden",
                     "title": f["file_name"]
                 }},
                 {"widgettype": "Text", "options": {"text": f["file_type"].upper(), "cfontsize": 11, "color": "#999", "cwidth": 5, "textAlign": "center"}},
