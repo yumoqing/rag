@@ -40,7 +40,7 @@
             "wid": "search_bar",
             "event": "search",
             "actiontype": "script",
-            "script": "var kw=event.params.keyword||'';var kb=bricks.getWidgetById('kb_selector',this);var kb_id=kb?kb.getValue()||'':'all';var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&keyword='+encodeURIComponent(kw);var target=bricks.getWidgetById('search_results',this);if(target)bricks.buildUrlwidgetHandler(this,target,{},{options:{url:u},mode:'replace'})"
+            "script": "var kw=event.params.keyword||'';var kb=bricks.getWidgetById('kb_selector',this);var kb_id=kb?kb.getValue()||'':'all';var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&keyword='+encodeURIComponent(kw);var target=bricks.getWidgetById('search_results',this);if(target){bricks.buildUrlwidgetHandler(this,target,{},{options:{url:u},mode:'replace'})()}"
         },
         {
             "wid": "search_file",
