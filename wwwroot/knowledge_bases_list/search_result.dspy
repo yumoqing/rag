@@ -29,25 +29,32 @@ if not query:
         ]
     }, ensure_ascii=False)
 
-import aiohttp
-
-async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as s:
-    # 1. Embed
-    r = await s.post('https://embedding.opencomputing.net:10443/api/embed',
+# 1. Embed
+vec = []
+try:
+    client = StreamHttpClient()
+    resp = await client.request('POST', 'https://embedding.opencomputing.net:10443/api/embed',
         json={"texts": [query], "model": "CLIP-ViT-H-14"})
-    emb = await r.json() if r.status == 200 else {}
+    emb = json.loads(resp)
     vec = emb.get("text_embeddings", emb.get("embeddings", [[]]))[0]
-    if not vec:
-        return json.dumps({"widgettype": "Text", "options": {"text": "向量化失败", "cfontsize": 14, "color": "#e74c3c"}}, ensure_ascii=False)
+except:
+    pass
+if not vec:
+    return json.dumps({"widgettype": "Text", "options": {"text": "向量化失败", "cfontsize": 14, "color": "#e74c3c"}}, ensure_ascii=False)
 
-    # 2. VDB search
+# 2. VDB search
+raw_rows = []
+try:
     recall_n = top_k * 3
-    r2 = await s.post('https://vectordb.opencomputing.net:10443/v1/query',
+    client2 = StreamHttpClient()
+    resp2 = await client2.request('POST', 'https://vectordb.opencomputing.net:10443/v1/query',
         json={"colname": kb_id, "vector": vec, "pagerows": recall_n, "output_fields": ["*"]})
-    vdb = await r2.json() if r2.status == 200 else {}
+    vdb = json.loads(resp2)
     raw_rows = vdb.get("data", {}).get("rows", [])
     if not isinstance(raw_rows, list):
         raw_rows = []
+except:
+    pass
 
 hits = []
 for row in raw_rows:
