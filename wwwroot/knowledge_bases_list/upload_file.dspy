@@ -1,4 +1,4 @@
-import aiohttp, base64, os, subprocess
+import base64, os, subprocess
 ns = params_kw.copy()
 kb_id = ns.get('kb_id', '')
 folder_id = ns.get('folder', '')
@@ -67,29 +67,26 @@ if ext_l in text_exts:
 # --- IMAGE: face detection ---
 if ext_l in image_exts:
     img_b64 = base64.b64encode(file_data).decode()
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
-        try:
-            r = await s.post('https://media.opencomputing.net/face/api/detect', json={"images": [img_b64]})
-            if r.status == 200:
-                fd = await r.json()
-                results = fd.get("results", [])
-                if results and isinstance(results[0], dict):
-                    face_count = len(results[0].get("faces", results[0].get("detections", [])))
-            meta_parts['face'] = face_count
-        except: pass
+    try:
+        client = StreamHttpClient()
+        resp = await client.request('POST', 'https://media.opencomputing.net/face/api/detect', json={"images": [img_b64]})
+        fd = json.loads(resp)
+        results = fd.get("results", [])
+        if results and isinstance(results[0], dict):
+            face_count = len(results[0].get("faces", results[0].get("detections", [])))
+        meta_parts['face'] = face_count
+    except: pass
 
 # --- AUDIO: voiceprint ---
 if ext_l in audio_exts:
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as s:
-        try:
-            form = aiohttp.FormData()
-            form.add_field('file', file_data, filename=file_name)
-            r = await s.post('https://media.opencomputing.net/voiceprint/extract/submit', data=form)
-            if r.status == 200:
-                vd = await r.json()
-                voice_speakers = vd.get('speakers', 1) if vd.get('status') == 'SUCCEEDED' else (1 if vd.get('embedding') else 0)
-            meta_parts['voiceprint'] = voice_speakers
-        except: pass
+    try:
+        client = StreamHttpClient()
+        resp = await client.request('POST', 'https://media.opencomputing.net/voiceprint/extract/submit',
+            files={'file': (file_name, file_data)})
+        vd = json.loads(resp)
+        voice_speakers = vd.get('speakers', 1) if vd.get('status') == 'SUCCEEDED' else (1 if vd.get('embedding') else 0)
+        meta_parts['voiceprint'] = voice_speakers
+    except: pass
 
 # --- VIDEO: frame extraction ---
 if ext_l in video_exts:
@@ -102,39 +99,38 @@ if ext_l in video_exts:
             with open(tmp_img, 'rb') as fi:
                 frame_data = fi.read()
             img_b64 = base64.b64encode(frame_data).decode()
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+            try:
+                client = StreamHttpClient()
+                resp = await client.request('POST', 'https://media.opencomputing.net/face/api/detect', json={"images": [img_b64]})
+                fd = json.loads(resp)
+                results = fd.get("results", [])
+                if results and isinstance(results[0], dict):
+                    face_count = len(results[0].get("faces", results[0].get("detections", [])))
+            except: pass
+            # --- CLIP image embedding for video frame ---
+            try:
+                client2 = StreamHttpClient()
+                resp2 = await client2.request('POST', 'https://embedding.opencomputing.net/api/embed',
+                    json={"images": [img_b64], "model": "CLIP-ViT-H-14"})
+                emb_data = json.loads(resp2)
+                img_embeddings = emb_data.get("image_embeddings", emb_data.get("embeddings", []))
+            except:
+                img_embeddings = []
+            if img_embeddings:
                 try:
-                    r = await s.post('https://media.opencomputing.net/face/api/detect', json={"images": [img_b64]})
-                    if r.status == 200:
-                        fd = await r.json()
-                        results = fd.get("results", [])
-                        if results and isinstance(results[0], dict):
-                            face_count = len(results[0].get("faces", results[0].get("detections", [])))
-                except: pass
-                # --- CLIP image embedding for video frame ---
-                if os.path.exists(tmp_img):
-                    img_b64_frame = base64.b64encode(frame_data).decode()
-                    try:
-                        r2 = await s.post('https://embedding.opencomputing.net/api/embed',
-                            json={"images": [img_b64_frame], "model": "CLIP-ViT-H-14"})
-                        emb_data = await r2.json() if r2.status == 200 else {}
-                        img_embeddings = emb_data.get("image_embeddings", emb_data.get("embeddings", []))
-                    except:
-                        img_embeddings = []
-                    if img_embeddings:
-                        try:
-                            vdb_data = {"colname": kb_id, "data": [
-                                {"id": doc_id + "_frame0", "vector": img_embeddings[0], "text": file_name}
-                            ]}
-                            await s.post('https://vectordb.opencomputing.net/v1/upsert', json=vdb_data)
-                            async with get_sor_context(env, 'rag') as sor:
-                                await sor.sqlExe(
-                                    "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
-                                    "VALUES (${id}$, ${doc_id}$, ${kb_id}$, 0, ${content}$, ${vid}$, NOW())",
-                                    {"id": doc_id + "_c0", "doc_id": doc_id, "kb_id": kb_id,
-                                     "content": file_name, "vid": doc_id + "_frame0"})
-                        except:
-                            pass
+                    client3 = StreamHttpClient()
+                    vdb_data = {"colname": kb_id, "data": [
+                        {"id": doc_id + "_frame0", "vector": img_embeddings[0], "text": file_name}
+                    ]}
+                    await client3.request('POST', 'https://vectordb.opencomputing.net/v1/upsert', json=vdb_data)
+                    async with get_sor_context(env, 'rag') as sor:
+                        await sor.sqlExe(
+                            "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
+                            "VALUES (${id}$, ${doc_id}$, ${kb_id}$, 0, ${content}$, ${vid}$, NOW())",
+                            {"id": doc_id + "_c0", "doc_id": doc_id, "kb_id": kb_id,
+                             "content": file_name, "vid": doc_id + "_frame0"})
+                except:
+                    pass
             os.remove(tmp_img)
     except: pass
 
@@ -156,35 +152,36 @@ if text and len(text.strip()) > 10:
     if cur: chunks.append(cur)
 
     if chunks:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+        try:
+            client = StreamHttpClient()
+            resp = await client.request('POST', 'https://embedding.opencomputing.net/api/embed',
+                json={"texts": chunks, "model": "CLIP-ViT-H-14"})
+            emb_data = json.loads(resp)
+            embeddings = emb_data.get("text_embeddings", emb_data.get("embeddings", []))
+        except:
+            embeddings = []
+
+        vector_ids = []
+        if embeddings:
             try:
-                r = await s.post('https://embedding.opencomputing.net/api/embed',
-                    json={"texts": chunks, "model": "CLIP-ViT-H-14"})
-                emb_data = await r.json() if r.status == 200 else {}
-                embeddings = emb_data.get("text_embeddings", emb_data.get("embeddings", []))
+                client2 = StreamHttpClient()
+                vdb_data = {"colname": kb_id, "data": [
+                    {"id": doc_id + "_" + str(i), "vector": emb, "text": chunks[i]}
+                    for i, emb in enumerate(embeddings)]}
+                await client2.request('POST', 'https://vectordb.opencomputing.net/v1/upsert', json=vdb_data)
+                vector_ids = [doc_id + "_" + str(i) for i in range(len(embeddings))]
             except:
-                embeddings = []
+                pass
 
-            vector_ids = []
-            if embeddings:
-                try:
-                    vdb_data = {"colname": kb_id, "data": [
-                        {"id": doc_id + "_" + str(i), "vector": emb, "text": chunks[i]}
-                        for i, emb in enumerate(embeddings)]}
-                    await s.post('https://vectordb.opencomputing.net/v1/upsert', json=vdb_data)
-                    vector_ids = [doc_id + "_" + str(i) for i in range(len(embeddings))]
-                except:
-                    pass
-
-            async with get_sor_context(env, 'rag') as sor:
-                for i, chunk_text in enumerate(chunks):
-                    vid = vector_ids[i] if i < len(vector_ids) else ''
-                    await sor.sqlExe(
-                        "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
-                        "VALUES (${id}$, ${doc_id}$, ${kb_id}$, ${idx}$, ${content}$, ${vid}$, NOW())",
-                        {"id": doc_id + "_c" + str(i), "doc_id": doc_id, "kb_id": kb_id,
-                         "idx": i, "content": chunk_text[:2000], "vid": vid})
-            chunks_n = len(chunks)
+        async with get_sor_context(env, 'rag') as sor:
+            for i, chunk_text in enumerate(chunks):
+                vid = vector_ids[i] if i < len(vector_ids) else ''
+                await sor.sqlExe(
+                    "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
+                    "VALUES (${id}$, ${doc_id}$, ${kb_id}$, ${idx}$, ${content}$, ${vid}$, NOW())",
+                    {"id": doc_id + "_c" + str(i), "doc_id": doc_id, "kb_id": kb_id,
+                     "idx": i, "content": chunk_text[:2000], "vid": vid})
+        chunks_n = len(chunks)
 
 # --- SAVE TO DB ---
 meta_json = json.dumps(meta_parts, ensure_ascii=False)
