@@ -1,4 +1,4 @@
-import base64, os, subprocess
+import aiohttp, base64, os, subprocess
 ns = params_kw.copy()
 kb_id = ns.get('kb_id', '')
 folder_id = ns.get('folder', '')
