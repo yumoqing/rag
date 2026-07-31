@@ -1,0 +1,97 @@
+ns = params_kw.copy()
+kb_id = ns.get('kb_id', '')
+env = request._run_ns
+
+rows = []
+async with get_sor_context(env, 'rag') as sor:
+    recs = await sor.sqlExe(
+        "SELECT id, file_name, file_size, file_type, file_path, metadata, status, chunk_count "
+        "FROM documents WHERE kb_id=${kb_id}$ AND metadata IS NOT NULL AND metadata != '' "
+        "ORDER BY created_at DESC LIMIT 50",
+        {"kb_id": kb_id})
+    rows = [dict(r) for r in recs]
+
+cards = []
+
+import json as _json
+
+for r in rows:
+    meta = {}
+    try:
+        meta = _json.loads(r['metadata'] or '{}')
+    except:
+        pass
+    face_count = meta.get('face', meta.get('faces', 0)) or 0
+    speakers = meta.get('speakers', meta.get('voiceprint', 0)) or 0
+
+    # Build card for this document
+    ext = (r['file_name'] or '').rsplit('.', 1)[-1].lower() if '.' in (r['file_name'] or '') else ''
+    icon = '📄'
+    if ext in ('mp4','avi','mov','mkv','webm'): icon = '🎬'
+    elif ext in ('jpg','jpeg','png','gif','bmp','webp'): icon = '🖼'
+    elif ext in ('mp3','wav','flac','ogg','m4a'): icon = '🎵'
+    elif ext in ('pdf',): icon = '📕'
+    elif ext in ('docx','doc'): icon = '📘'
+    elif ext in ('pptx','ppt'): icon = '📙'
+    elif ext in ('xlsx','xls'): icon = '📊'
+
+    badges = []
+    if face_count > 0:
+        badges.append('😀×' + str(int(face_count)))
+    if speakers > 0:
+        badges.append('🎤×' + str(int(speakers)))
+    badge_text = ' '.join(badges) if badges else '暂无识别'
+
+    cards.append({
+        "widgettype": "VBox",
+        "options": {"width": "calc(50% - 8px)", "padding": "14px", "marginBottom": "12px",
+                     "border": "1px solid #e0e0e0", "borderRadius": "8px", "bgcolor": "#fff",
+                     "css": "card", "display": "inline-block", "verticalAlign": "top"},
+        "subwidgets": [
+            {"widgettype": "HBox", "options": {"alignItems": "center", "marginBottom": "8px"}, "subwidgets": [
+                {"widgettype": "Text", "options": {"text": icon + " " + (r['file_name'] or '')[:40],
+                    "cfontsize": 14, "fontWeight": "bold", "color": "#333", "cwidth": 0, "css": "filler"}}
+            ]},
+            {"widgettype": "HBox", "options": {"spacing": "8px", "marginBottom": "10px"}, "subwidgets": [
+                {"widgettype": "Text", "options": {"text": badge_text, "cfontsize": 12,
+                    "bgcolor": "#e8f5e9" if face_count or speakers else "#f5f5f5",
+                    "color": "#2e7d32" if face_count or speakers else "#999",
+                    "padding": "4px 10px", "borderRadius": "12px"}}
+            ]},
+            {"widgettype": "HBox", "options": {"spacing": "6px"}, "subwidgets": [
+                {"widgettype": "Text", "options": {"text": "😀 人脸: " + str(int(face_count)),
+                    "cfontsize": 12, "color": "#666"}},
+                {"widgettype": "Text", "options": {"text": "🎤 声纹: " + str(int(speakers)),
+                    "cfontsize": 12, "color": "#666", "marginLeft": "12px"}}
+            ]},
+            {"widgettype": "Text", "options": {"text": "", "cheight": 0.3}},
+            {"widgettype": "Button", "options": {
+                "label": "🏷 添加标签",
+                "cfontsize": 12, "bgcolor": "#f0f0f0", "color": "#666",
+                "css": "tag-btn", "padding": "4px 12px", "borderRadius": "16px",
+                "border": "1px solid #ddd"
+            }, "binds": [{
+                "wid": "self", "event": "click", "actiontype": "script",
+                "target": "self",
+                "script": "var doc_id='" + r['id'] + "';var tag=prompt('请输入标签:');if(!tag)return;var u='/rag/knowledge_bases_list/add_tag.dspy?doc_id='+encodeURIComponent(doc_id)+'&tag='+encodeURIComponent(tag)+'&kb_id=" + kb_id + "';fetch(u).then(function(r){return r.json()}).then(function(d){if(d.status==='SUCCEEDED'){alert('标签已添加');window.location.reload()}else{alert('失败:'+JSON.stringify(d))}})"
+            }]}
+        ]
+    })
+
+if not cards:
+    return json.dumps({
+        "widgettype": "Text", "options": {
+            "text": "暂无分析结果", "cfontsize": 14, "color": "#aaa", "halign": "center", "marginTop": "40px"
+        }
+    }, ensure_ascii=False)
+
+# Wrap cards in FlexBox-like container
+return json.dumps({
+    "widgettype": "VBox",
+    "options": {"padding": "20px", "spacing": "8px"},
+    "subwidgets": [
+        {"widgettype": "Text", "options": {"text": "📊 文件分析结果", "cfontsize": 20, "fontWeight": "bold", "color": "#1a1a2e", "marginBottom": "16px"}},
+        {"widgettype": "Text", "options": {"text": "人脸检测 & 声纹识别 | 共 " + str(len(cards)) + " 个文件", "cfontsize": 13, "color": "#888", "marginBottom": "16px"}},
+        {"widgettype": "VBox", "options": {"width": "100%"}, "subwidgets": cards}
+    ]
+}, ensure_ascii=False)
