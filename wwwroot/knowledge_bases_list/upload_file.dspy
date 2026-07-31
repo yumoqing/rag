@@ -29,6 +29,11 @@ ext_l = ext.lower()
 # creates its own DBPools connection. All args are primitives.
 # ============================================================
 async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
+    # DEBUG: verify background_reco executes
+    try:
+        with open('/tmp/_bg_trace_' + doc_id + '.txt', 'w') as df:
+            df.write('ingest_doc started\n')
+    except: pass
     db = DBPools()
     text = ''
     chunks_n = 0
