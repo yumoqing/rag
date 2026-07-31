@@ -30,11 +30,6 @@ ext_l = ext.lower()
 # ============================================================
 async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
     db = DBPools()
-    # TRACE
-    try:
-        with open('/tmp/_t2_' + doc_id, 'w') as df:
-            df.write('db ok, reading file: ' + real_path)
-    except: pass
     text = ''
     chunks_n = 0
     face_count = 0
