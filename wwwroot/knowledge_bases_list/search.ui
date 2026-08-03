@@ -40,14 +40,14 @@
             "wid": "search_bar",
             "event": "search",
             "actiontype": "script",
-            "script": "var kw=event.params.keyword||'';var kb=bricks.getWidgetById('kb_selector',this);var kb_id=kb?kb.getValue()||'':'all';var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&keyword='+encodeURIComponent(kw);var target=bricks.getWidgetById('search_results',this);if(target){bricks.buildUrlwidgetHandler(this,target,{},{options:{url:u},mode:'replace'})()}"
+            "script": "var kw=event.params.keyword||'';var kb=bricks.getWidgetById('kb_selector',this);var kb_id=(kb&&kb.resultValue())||'all';var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&keyword='+encodeURIComponent(kw);var target=bricks.getWidgetById('search_results',this);if(target){bricks.buildUrlwidgetHandler(this,target,{},{options:{url:u},mode:'replace'})()}"
         },
         {
             "wid": "search_file",
             "event": "changed",
             "actiontype": "script",
             "target": "search_file",
-            "script": "var f=this.value;if(!f)return;if(Array.isArray(f))f=f[0];if(!f)return;var kb=bricks.getWidgetById('kb_selector',this.parent);var kb_id=kb?kb.getValue()||'':'all';var fd=new FormData();fd.append('file',f);var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&file_name='+encodeURIComponent(f.name);var pv=this.parent.parent;fetch(u,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('search_results',pv);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"
+            "script": "var f=this.value;if(!f)return;if(Array.isArray(f))f=f[0];if(!f)return;var kb=bricks.getWidgetById('kb_selector',this.parent);var kb_id=(kb&&kb.resultValue())||'all';var fd=new FormData();fd.append('file',f);var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&file_name='+encodeURIComponent(f.name);var pv=this.parent.parent;fetch(u,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('search_results',pv);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"
         }
     ]
 }
