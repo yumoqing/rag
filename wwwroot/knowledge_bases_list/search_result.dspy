@@ -2,6 +2,8 @@ ns = params_kw.copy()
 kb_id = ns.get('kb_id', '')
 env = request._run_ns
 query = ns.get("query") or ns.get("value") or ns.get("keyword") or ns.get("text") or ""
+info(f'[search_result] params_kw={params_kw}')
+info(f'[search_result] parsed: kb_id={kb_id!r} query={query!r} method={request.method} url={request.url}')
 
 file_data = None
 file_name = None
