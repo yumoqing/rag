@@ -30,6 +30,11 @@ ext_l = ext.lower()
 # ============================================================
 async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
     db = DBPools()
+
+    async def ensure_vdb_collection(client, kb_id):
+        payload = {"colname": kb_id, "fields": [{"name": "id", "type": "str", "is_primary": True, "max_length": 64}, {"name": "vector", "type": "fvector", "dim": 1024}, {"name": "text", "type": "str", "max_length": 65535}], "description": "RAG kb", "metric": "COSINE"}
+        await client.request('POST', 'https://vectordb.opencomputing.net:10443/v1/createcollection', json=payload)
+
     text = ''
     chunks_n = 0
     face_count = 0
@@ -80,7 +85,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
             img_b64 = base64.b64encode(file_data).decode()
             try:
                 client = StreamHttpClient()
-                resp = await client.request('POST', 'https://media.opencomputing.net/face/api/detect', json={"images": [img_b64]})
+                resp = await client.request('POST', 'https://media.opencomputing.net:10443/face/api/detect', json={"images": [img_b64]})
                 fd = json.loads(resp)
                 results = fd.get("results", [])
                 if results and isinstance(results[0], dict):
@@ -92,7 +97,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
         if ext_l in audio_exts:
             try:
                 client = StreamHttpClient()
-                resp = await client.request('POST', 'https://media.opencomputing.net/voiceprint/extract/submit',
+                resp = await client.request('POST', 'https://media.opencomputing.net:10443/voiceprint/extract/submit',
                     files={'file': (file_name, file_data)})
                 vd = json.loads(resp)
                 voice_speakers = vd.get('speakers', 1) if vd.get('status') == 'SUCCEEDED' else (1 if vd.get('embedding') else 0)
@@ -112,7 +117,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
                     img_b64 = base64.b64encode(frame_data).decode()
                     try:
                         client = StreamHttpClient()
-                        resp = await client.request('POST', 'https://media.opencomputing.net/face/api/detect', json={"images": [img_b64]})
+                        resp = await client.request('POST', 'https://media.opencomputing.net:10443/face/api/detect', json={"images": [img_b64]})
                         fd = json.loads(resp)
                         results = fd.get("results", [])
                         if results and isinstance(results[0], dict):
@@ -121,7 +126,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
                     # --- CLIP image embedding for video frame ---
                     try:
                         client2 = StreamHttpClient()
-                        resp2 = await client2.request('POST', 'https://embedding.opencomputing.net/api/embed',
+                        resp2 = await client2.request('POST', 'https://embedding.opencomputing.net:10443/api/embed',
                             json={"images": [img_b64], "model": "CLIP-ViT-H-14"})
                         emb_data = json.loads(resp2)
                         img_embeddings = emb_data.get("image_embeddings", emb_data.get("embeddings", []))
@@ -130,16 +135,17 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
                     if img_embeddings:
                         try:
                             client3 = StreamHttpClient()
+                            await ensure_vdb_collection(client3, kb_id)
                             vdb_data = {"colname": kb_id, "data": [
-                                {"id": doc_id + "_frame0", "vector": img_embeddings[0], "text": file_name}
+                                {"id": doc_id + "_c0", "vector": img_embeddings[0], "text": file_name}
                             ]}
-                            await client3.request('POST', 'https://vectordb.opencomputing.net/v1/upsert', json=vdb_data)
+                            await client3.request('POST', 'https://vectordb.opencomputing.net:10443/v1/upsert', json=vdb_data)
                             async with db.sqlorContext('rag') as sor:
                                 await sor.sqlExe(
                                     "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
                                     "VALUES (${id}$, ${doc_id}$, ${kb_id}$, 0, ${content}$, ${vid}$, NOW())",
                                     {"id": doc_id + "_c0", "doc_id": doc_id, "kb_id": kb_id,
-                                     "content": file_name, "vid": doc_id + "_frame0"})
+                                     "content": file_name, "vid": doc_id + "_c0"})
                         except:
                             pass
                     os.remove(tmp_img)
@@ -165,7 +171,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
             if chunks:
                 try:
                     client = StreamHttpClient()
-                    resp = await client.request('POST', 'https://embedding.opencomputing.net/api/embed',
+                    resp = await client.request('POST', 'https://embedding.opencomputing.net:10443/api/embed',
                         json={"texts": chunks, "model": "CLIP-ViT-H-14"})
                     emb_data = json.loads(resp)
                     embeddings = emb_data.get("text_embeddings", emb_data.get("embeddings", []))
@@ -176,11 +182,13 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
                 if embeddings:
                     try:
                         client2 = StreamHttpClient()
+                        await ensure_vdb_collection(client2, kb_id)
                         vdb_data = {"colname": kb_id, "data": [
-                            {"id": doc_id + "_" + str(i), "vector": emb, "text": chunks[i]}
+                            {"id": doc_id + "_c" + str(i), "vector": emb, "text": chunks[i]}
                             for i, emb in enumerate(embeddings)]}
-                        await client2.request('POST', 'https://vectordb.opencomputing.net/v1/upsert', json=vdb_data)
-                        vector_ids = [doc_id + "_" + str(i) for i in range(len(embeddings))]
+                        resp3 = await client2.request('POST', 'https://vectordb.opencomputing.net:10443/v1/upsert', json=vdb_data)
+                        if json.loads(resp3).get('status') == 'SUCCEEDED':
+                            vector_ids = [doc_id + "_c" + str(i) for i in range(len(embeddings))]
                     except:
                         pass
 

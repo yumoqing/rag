@@ -183,8 +183,10 @@ async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as ses
         # VDB
         if embeddings:
             try:
+                await session.post('https://vectordb.opencomputing.net:10443/v1/createcollection',
+                    json={"colname": kb_id, "fields": [{"name": "id", "type": "str", "is_primary": True, "max_length": 64}, {"name": "vector", "type": "fvector", "dim": 1024}, {"name": "text", "type": "str", "max_length": 65535}], "description": "RAG kb", "metric": "COSINE"})
                 await session.post('https://vectordb.opencomputing.net:10443/v1/upsert',
-                    json={"colname": kb_id, "data": [{"id": f"{fid}_{i}", "vector": e, "text": chunks[i]} for i, e in enumerate(embeddings)]})
+                    json={"colname": kb_id, "data": [{"id": fid + "_c" + str(i), "vector": e, "text": chunks[i]} for i, e in enumerate(embeddings)]})
             except: pass
 
         # DB
