@@ -58,7 +58,27 @@ try:
 except:
     pass
 
+# 3. Keyword recall (hybrid search: vector alone misses technical terms)
+kw_ids = set()
+kw_rows = []
+try:
+    tokens = [t for t in query.split() if t][:5] or [query]
+    conds = []
+    nsq = {"kb_id": kb_id}
+    for i, t in enumerate(tokens):
+        conds.append("content LIKE ${kw_" + str(i) + "}$")
+        nsq["kw_" + str(i)] = "%" + t + "%"
+    ksql = "SELECT id, doc_id, content FROM document_chunks WHERE kb_id=${kb_id}$ AND (" + " OR ".join(conds) + ") LIMIT 20"
+    async with get_sor_context(env, 'rag') as sor:
+        krecs = await sor.sqlExe(ksql, nsq)
+    for r in krecs:
+        kw_ids.add(r.id)
+        kw_rows.append({"id": r.id, "doc_id": r.doc_id or "", "score": 0.99, "text": r.content or '', "kw": True})
+except Exception as e:
+    info('[search_result] keyword recall failed: %s' % e)
+
 hits = []
+seen = set()
 for row in raw_rows:
     rid = str(row.get("id", ""))
     score = row.get("score", 0)
@@ -75,7 +95,13 @@ for row in raw_rows:
             chunk_text = recs[0].content or ''
             doc_id = recs[0].doc_id or doc_id
     if chunk_text:
-        hits.append({"id": rid, "doc_id": doc_id, "score": score, "text": chunk_text})
+        is_kw = rid in kw_ids
+        hits.append({"id": rid, "doc_id": doc_id, "score": 0.99 if is_kw else score, "text": chunk_text, "kw": is_kw})
+        seen.add(rid)
+for kr in kw_rows:
+    if kr["id"] not in seen:
+        hits.append(kr)
+        seen.add(kr["id"])
 
 hits.sort(key=lambda x: x.get("score", 0), reverse=True)
 hits = hits[:top_k]
@@ -91,13 +117,16 @@ else:
     for i, h in enumerate(hits):
         score_pct = round(float(h["score"]) * 100, 1)
         color = "#3b82f6" if score_pct > 60 else ("#10b981" if score_pct > 30 else "#f59e0b")
+        badges = [{"widgettype": "Text", "options": {"text": f"{score_pct}%", "cfontsize": 11, "bgcolor": color, "color": "#fff", "padding": "2px 8px", "borderRadius": "10px"}}]
+        if h.get("kw"):
+            badges.append({"widgettype": "Text", "options": {"text": "📌 关键词命中", "cfontsize": 11, "bgcolor": "#f59e0b", "color": "#fff", "padding": "2px 8px", "borderRadius": "10px", "marginLeft": "6px"}})
         subwidgets.append({
             "widgettype": "VBox",
             "options": {"padding": "12px 16px", "marginBottom": "8px", "border": "1px solid #e0e0e0", "borderLeft": f"3px solid {color}", "bgcolor": "#fafafa", "borderRadius": "4px"},
             "subwidgets": [
                 {"widgettype": "HBox", "options": {"alignItems": "center", "marginBottom": "6px"}, "subwidgets": [
                     {"widgettype": "Text", "options": {"text": f"#{i+1}", "cfontsize": 12, "fontWeight": "bold", "color": color, "marginRight": "8px"}},
-                    {"widgettype": "Text", "options": {"text": f"{score_pct}%", "cfontsize": 11, "bgcolor": color, "color": "#fff", "padding": "2px 8px", "borderRadius": "10px"}},
+                    *badges,
                     {"widgettype": "Text", "options": {"text": f"  {h['id'][:16]}", "cfontsize": 11, "color": "#999", "marginLeft": "8px"}}
                 ]},
                 {"widgettype": "Text", "options": {"text": h["text"][:300], "cfontsize": 13, "color": "#333", "lineHeight": "1.6"}}
