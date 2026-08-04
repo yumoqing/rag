@@ -1,7 +1,6 @@
 {
     "widgettype": "VBox",
     "options": {
-        "cheight": 40,
         "width": "100%",
         "padding": "16px",
         "spacing": "16px"
