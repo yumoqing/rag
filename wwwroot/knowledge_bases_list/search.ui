@@ -1,6 +1,6 @@
 {
     "widgettype": "VBox",
-    "options": {"padding": "20px", "spacing": "16px", "width": "100%"},
+    "options": {"padding": "20px", "spacing": "16px", "width": "100%", "height": "100%", "css": "filler"},
     "subwidgets": [
         {"widgettype": "Text", "options": {"text": "🔍 知识检索", "cfontsize": 22, "fontWeight": "bold", "color": "#1a1a2e"}},
         {"widgettype": "Text", "options": {"text": "选择知识库，输入文字或上传文件检索", "cfontsize": 13, "color": "#888"}},
@@ -28,10 +28,16 @@
         },
         {
             "widgettype": "VBox",
-            "id": "search_results",
-            "options": {"marginTop": "16px", "spacing": "0px"},
+            "options": {"css": "filler", "marginTop": "16px", "width": "100%", "padding": "0", "spacing": "0"},
             "subwidgets": [
-                {"widgettype": "Text", "options": {"text": "选择知识库，输入文字或上传文件开始检索", "cfontsize": 14, "color": "#aaa", "halign": "center", "marginTop": "40px"}}
+                {
+                    "widgettype": "VScrollPanel",
+                    "id": "search_results",
+                    "options": {"css": "filler", "padding": "0", "spacing": "0"},
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "选择知识库，输入文字或上传文件开始检索", "cfontsize": 14, "color": "#aaa", "halign": "center", "marginTop": "40px"}}
+                    ]
+                }
             ]
         }
     ],
