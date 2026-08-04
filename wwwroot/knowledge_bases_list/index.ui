@@ -84,7 +84,7 @@
         {
             "widgettype": "urlwidget",
             "options": {
-                "url": "{{entire_url('/api/kb/list')}}"
+                "url": "{{entire_url('./kb_list.dspy')}}"
             }
         }
     ]

@@ -1,0 +1,33 @@
+env = request._run_ns
+cards = []
+async with get_sor_context(env, 'rag') as sor:
+    recs = await sor.R("knowledge_bases", {})
+    for r in recs:
+        doc_recs = await sor.R("documents", {"kb_id": r.id})
+        doc_count = len(doc_recs)
+        total_size = r.total_size or 0
+        if total_size >= 1073741824:
+            size_str = "%.1fGB" % (total_size / 1073741824)
+        elif total_size >= 1048576:
+            size_str = "%.0fMB" % (total_size / 1048576)
+        elif total_size >= 1024:
+            size_str = "%.0fKB" % (total_size / 1024)
+        else:
+            size_str = str(total_size) + "B"
+        engine = r.embedding_engine or "CLIP"
+        cards.append({
+            "widgettype": "VBox",
+            "options": {"cwidth": 16, "cheight": 12, "bgcolor": "#f0f7ff", "padding": "16px", "css": "card clickable", "border": "1px solid #d0e4f7"},
+            "subwidgets": [
+                {"widgettype": "Text", "options": {"text": "📚 " + str(r.name), "cfontsize": 16, "fontWeight": "bold"}},
+                {"widgettype": "Text", "options": {"text": str(engine) + " · 1024维", "cfontsize": 12, "color": "#888"}},
+                {"widgettype": "HBox", "options": {"spacing": "12px"}, "subwidgets": [
+                    {"widgettype": "Text", "options": {"text": "📄 " + str(doc_count) + "文档", "cfontsize": 12, "color": "#666"}},
+                    {"widgettype": "Text", "options": {"text": "💾 " + size_str, "cfontsize": 12, "color": "#666"}}]}
+            ],
+            "binds": [{"wid": "self", "event": "click", "actiontype": "urlwidget", "target": "app.rag_main_content", "mode": "replace",
+                       "options": {"url": "/rag/knowledge_bases_list/detail.ui", "params": {"kb_id": str(r.id), "kb_name": str(r.name)}}}]
+        })
+if not cards:
+    cards.append({"widgettype": "Text", "options": {"text": "暂无知识库", "color": "#aaa", "cfontsize": 14, "halign": "center"}})
+return json.dumps({"widgettype": "HBox", "options": {"width": "100%", "spacing": "12px", "wrap": True}, "subwidgets": cards}, ensure_ascii=False, default=str)
