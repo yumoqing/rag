@@ -12,13 +12,30 @@ if not file_data:
 
 env = request._run_ns
 userorgid = await env.get_userorgid()
+file_size = len(file_data)
+
+# ---- ORG STORAGE QUOTA CHECK (per-org limit, not global) ----
+def fmt_bytes(n):
+    if n < 1024: return str(n) + 'B'
+    if n < 1048576: return str(round(n/1024, 1)) + 'KB'
+    return str(round(n/1048576, 1)) + 'MB'
+
+quota_limit = 104857600
+used = 0
+async with get_sor_context(env, 'rag') as sor:
+    rec = await sor.sqlExe("SELECT COALESCE(SUM(file_size),0) AS used FROM documents WHERE org_id=${org_id}$", {"org_id": userorgid})
+    if rec: used = int(rec[0].used)
+    lim = await sor.sqlExe("SELECT limit_bytes FROM org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
+    if lim: quota_limit = int(lim[0].limit_bytes)
+if used + file_size > quota_limit:
+    return json.dumps({"status": "error", "error": "storage_quota_exceeded",
+        "message": "存储配额超限：机构已用 " + fmt_bytes(used) + "，限额 " + fmt_bytes(quota_limit) + "，本文件 " + fmt_bytes(file_size)}, ensure_ascii=False)
 
 # Save file via FileStorage (returns web path e.g. /idfile/191/193/197/97/xxx.txt)
 web_path = await env.save_file(file_data, file_name)
 real_path = env.realpath(web_path)
 
 doc_id = str(uuid()).replace('-', '')[:16]
-file_size = len(file_data)
 ext = '.' + file_name.rsplit('.', 1)[1] if '.' in file_name else '.bin'
 ext_l = ext.lower()
 

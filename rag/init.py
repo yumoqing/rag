@@ -285,6 +285,12 @@ async def _enrich_search_results(env, hits):
     return hits
 
 
+def _fmt_bytes(n):
+    if n < 1024: return str(n) + 'B'
+    if n < 1048576: return str(round(n/1024, 1)) + 'KB'
+    return str(round(n/1048576, 1)) + 'MB'
+
+
 async def doc_upload_handler(request, params_kw, *args, **kwargs):
     """文件上传 → 保存 → DB记录 → 触发RAG入库"""
     env = request._run_ns
@@ -301,6 +307,20 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
         if not file_data:
             return json.dumps({"error": "no file data"})
 
+        file_size = len(file_data)
+
+        # ---- ORG STORAGE QUOTA CHECK (per-org limit, not global) ----
+        quota_limit = 104857600
+        used = 0
+        async with get_sor_context(env, 'rag') as sor:
+            rec = await sor.sqlExe("SELECT COALESCE(SUM(file_size),0) AS used FROM documents WHERE org_id=${org_id}$", {"org_id": userorgid})
+            if rec: used = int(rec[0].used)
+            lim = await sor.sqlExe("SELECT limit_bytes FROM org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
+            if lim: quota_limit = int(lim[0].limit_bytes)
+        if used + file_size > quota_limit:
+            return json.dumps({"error": "storage_quota_exceeded",
+                "message": "存储配额超限：机构已用 " + _fmt_bytes(used) + "，限额 " + _fmt_bytes(quota_limit) + "，本文件 " + _fmt_bytes(file_size)}, ensure_ascii=False)
+
         # Save file
         doc_id = uuid.uuid4().hex[:16]
         ext = os.path.splitext(file_name)[1] or ".bin"
@@ -311,7 +331,6 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
         with open(file_path, "wb") as f:
             f.write(file_data)
 
-        file_size = len(file_data)
         file_type = _detect_file_type(file_name, "application/octet-stream")
 
         # Create document record
