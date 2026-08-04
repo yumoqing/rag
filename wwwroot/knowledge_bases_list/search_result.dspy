@@ -2,6 +2,17 @@ ns = params_kw.copy()
 kb_id = ns.get('kb_id', '')
 env = request._run_ns
 query = ns.get("query") or ns.get("value") or ns.get("keyword") or ns.get("text") or ""
+# Defensive: legacy UI cached in browser double-encodes the keyword (%E5%88%86... arrives as-is).
+# Normal path: server already decoded once, no '%' present, this is a no-op.
+if "%" in query:
+    try:
+        from urllib.parse import unquote
+        d = unquote(query)
+        if d != query:
+            info(f'[search_result] unquote fallback: {query!r} -> {d!r}')
+            query = d
+    except Exception:
+        pass
 info(f'[search_result] params_kw={params_kw}')
 info(f'[search_result] parsed: kb_id={kb_id!r} query={query!r} method={request.method} url={request.url}')
 
