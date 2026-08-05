@@ -2,7 +2,8 @@ ns = params_kw.copy()
 kb_id = ns.get('kb_id', '')
 
 if not kb_id:
-    return json.dumps({"status": "error", "error": "kb_id required"}, ensure_ascii=False)
+    return {"widgettype": "urlwidget",
+            "options": {"url": entire_url('/rag/knowledge_bases_list/index.ui')}}
 
 env = request._run_ns
 userorgid = await env.get_userorgid()
@@ -14,7 +15,8 @@ async with get_sor_context(env, 'rag') as sor:
         "SELECT id, name FROM knowledge_bases WHERE id=${id}$ AND (org_id=${org_id}$ OR org_id IS NULL)",
         {"id": kb_id, "org_id": userorgid})
     if not kb:
-        return json.dumps({"status": "error", "error": "knowledge base not found or access denied"}, ensure_ascii=False)
+        return {"widgettype": "urlwidget",
+                "options": {"url": entire_url('/rag/knowledge_bases_list/index.ui')}}
 
     # Get all doc IDs and file paths for physical cleanup
     docs = await sor.sqlExe(
@@ -57,7 +59,6 @@ async with get_sor_context(env, 'rag') as sor:
     await sor.sqlExe(
         "DELETE FROM knowledge_bases WHERE id=${id}$",
         {"id": kb_id})
-    deleted["kb_name"] = str(kb[0].name)
 
 # Delete physical files
 for d in docs:
@@ -71,6 +72,5 @@ for d in docs:
         except Exception:
             pass
 
-return json.dumps({"status": "SUCCEEDED", "kb_name": str(kb[0].name),
-                  "documents": deleted["documents"], "files_removed": deleted["files"],
-                  "tags": deleted["tags"]}, ensure_ascii=False)
+return {"widgettype": "urlwidget",
+        "options": {"url": entire_url('/rag/knowledge_bases_list/index.ui')}}
