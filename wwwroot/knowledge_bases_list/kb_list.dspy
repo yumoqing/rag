@@ -50,14 +50,17 @@ async with get_sor_context(env, 'rag') as sor:
                     {"widgettype": "Text", "options": {"text": "\U0001f5d1\ufe0f \u5220\u9664",
                          "cfontsize": 12, "color": "#e74c3c", "css": "clickable",
                          "padding": "2px 8px", "borderRadius": "4px", "bgcolor": "#fee"},
-                     "binds": [{"wid": "self", "event": "click", "actiontype": "script",
-                                "script": "event.stopPropagation();"
-                                "var nm=" + safe_name + ";"
-                                "if(!confirm('\u786e\u8ba4\u5220\u9664\u77e5\u8bc6\u5e93\u300c'+nm+'\u300d\uff1f \u6b64\u64cd\u4f5c\u4e0d\u53ef\u6062\u590d\uff01'))return;"
-                                "fetch('/rag/knowledge_bases_list/delete_kb.dspy?kb_id=" + idstr + "').then(function(r){return r.json()}).then(function(d){"
-                                "if(d.status==='error'){alert('\u5220\u9664\u5931\u8d25\uff1a'+d.error);return;}"
-                                "window.location.href='/rag/knowledge_bases_list/index.ui';"
-                                "}).catch(function(){alert('\u7f51\u7edc\u9519\u8bef')});"}]}
+                     "binds": [
+                         {"wid": "self", "event": "click", "actiontype": "script",
+                          "script": "event.stopPropagation()"},
+                         {"wid": "self", "event": "click", "actiontype": "urlwidget",
+                          "target": "PopupWindow",
+                          "popup_options": {"title": "\u5220\u9664\u77e5\u8bc6\u5e93",
+                                             "width": "28%", "height": "auto",
+                                             "movable": True, "resizable": True, "modal": True},
+                          "options": {"url": "/rag/knowledge_bases_list/confirm_delete_form.dspy",
+                                      "params": {"kb_id": idstr, "name": namestr}}}
+                     ]}
                 ]}
             ],
             "binds": [
