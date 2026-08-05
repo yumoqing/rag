@@ -679,6 +679,12 @@ async def tag_create_handler(request, params_kw, *args, **kwargs):
             return json.dumps({"error": "kb_id and name required"})
         userorgid = await env.get_userorgid()
         async with get_sor_context(env, 'rag') as sor:
+            existing = await sor.sqlExe(
+                "SELECT id, color FROM tags WHERE kb_id=${kb_id}$ AND name=${name}$ AND org_id=${org_id}$",
+                {"kb_id": kb_id, "name": name, "org_id": userorgid})
+            if existing:
+                return json.dumps({"status": "SUCCEEDED", "tag_id": existing[0].id, "name": name,
+                                   "color": existing[0].color, "duplicate": True}, ensure_ascii=False)
             tag_id = uuid.uuid4().hex[:16]
             await sor.sqlExe(
                 "INSERT INTO tags (id, kb_id, name, color, org_id, created_at) "
@@ -865,6 +871,44 @@ async def tag_search_handler(request, params_kw, *args, **kwargs):
         return json.dumps({"error": str(e)})
 
 
+async def tag_sync_handler(request, params_kw, *args, **kwargs):
+    """全量同步媒体标签关联：删除不在选中列表的，插入新增的"""
+    env = request._run_ns
+    try:
+        kb_id = params_kw.get("kb_id", "")
+        media_type = params_kw.get("media_type", "")
+        media_id = params_kw.get("media_id", "")
+        tag_ids_str = params_kw.get("tag_ids", "")
+        if not all([kb_id, media_type, media_id]):
+            return json.dumps({"error": "kb_id, media_type, media_id required"})
+        if media_type not in ("document", "face", "voice"):
+            return json.dumps({"error": "media_type must be document/face/voice"})
+        wanted_ids = [t.strip() for t in tag_ids_str.split(",") if t.strip()]
+        async with get_sor_context(env, 'rag') as sor:
+            recs = await sor.sqlExe(
+                "SELECT id, tag_id FROM media_tags WHERE media_type=${type}$ AND media_id=${mid}$",
+                {"type": media_type, "mid": media_id})
+            current = {r.tag_id: r.id for r in recs}
+            removed = 0
+            for tid, mt_id in current.items():
+                if tid not in wanted_ids:
+                    await sor.sqlExe("DELETE FROM media_tags WHERE id=${id}$", {"id": mt_id})
+                    removed += 1
+            added = 0
+            for tid in wanted_ids:
+                if tid not in current:
+                    mt_id = uuid.uuid4().hex[:16]
+                    await sor.sqlExe(
+                        "INSERT INTO media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
+                        "VALUES (${id}$, ${kb_id}$, ${type}$, ${mid}$, ${tid}$, NOW())",
+                        {"id": mt_id, "kb_id": kb_id, "type": media_type, "mid": media_id, "tid": tid})
+                    added += 1
+            return json.dumps({"status": "SUCCEEDED", "added": added, "removed": removed})
+    except Exception as e:
+        exception(f"tag_sync: {e}, {format_exc()}")
+        return json.dumps({"error": str(e)})
+
+
 def init_rag_module():
     env = ServerEnv()
     rf = RegisterFunction()
@@ -884,3 +928,4 @@ def init_rag_module():
     rf.register("tag_unassign", tag_unassign_handler)
     rf.register("tag_media_tags", tag_media_tags_handler)
     rf.register("tag_search", tag_search_handler)
+    rf.register("tag_sync", tag_sync_handler)

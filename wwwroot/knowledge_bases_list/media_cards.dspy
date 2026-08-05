@@ -32,6 +32,20 @@ try:
                 "metadata": r.metadata or '{}',
                 "created_at": str(r.created_at)[:16] if r.created_at else ''
             })
+
+        # 查出入介质标签（从标签表中取出来），按 doc_id 编组
+        doc_ids = [r["id"] for r in rows]
+        doc_tags = {}
+        if doc_ids:
+            mt_recs = await sor.sqlExe(
+                "SELECT mt.media_id, t.name, t.color FROM media_tags mt "
+                "JOIN tags t ON mt.tag_id=t.id "
+                "WHERE mt.media_type='document' AND mt.media_id IN (${ids}$)",
+                {"ids": doc_ids})
+            for mt in mt_recs:
+                doc_tags.setdefault(mt.media_id, []).append({"name": mt.name, "color": mt.color or '#3b82f6'})
+        for r in rows:
+            r["media_tags"] = doc_tags.get(r["id"], [])
 except Exception:
     return {"widgettype": "Text", "options": {"text": "加载失败", "cfontsize": 14, "color": "#e74c3c", "halign": "center", "marginTop": "40px"}}
 
@@ -49,14 +63,7 @@ for f in rows:
     doc_id = f["id"]
     fname = f["file_name"]
     media_url = safe_url(f["file_path"])
-    meta = {}
-    try:
-        meta = json.loads(f["metadata"])
-    except Exception:
-        meta = {}
-    tags = meta.get('tags', [])
-    if not isinstance(tags, list):
-        tags = []
+    tags = f.get("media_tags", [])
 
     if kind == 'voice':
         media_widget = {"widgettype": "Html", "options": {"html": "<audio controls preload=\"metadata\" style=\"width:100%\" src=\"" + media_url + "\"></audio>", "padding": "8px 12px"}}
@@ -66,7 +73,9 @@ for f in rows:
     if tags:
         tag_widgets = []
         for t in tags:
-            tag_widgets.append({"widgettype": "Text", "options": {"text": "#" + str(t), "cfontsize": 10, "color": "#1565c0", "bgcolor": "#e3f2fd", "padding": "1px 8px", "borderRadius": "8px", "margin": "2px 4px 2px 0"}})
+            tag_widgets.append({"widgettype": "Text", "options": {"text": "#" + str(t["name"]), "cfontsize": 10,
+                               "color": "#1565c0", "bgcolor": "#e3f2fd",
+                               "padding": "1px 8px", "borderRadius": "8px", "margin": "2px 4px 2px 0"}})
         tag_row = {"widgettype": "HBox", "options": {"wrap": True, "padding": "0 12px", "alignItems": "center"}, "subwidgets": tag_widgets}
     else:
         tag_row = {"widgettype": "Text", "options": {"text": "暂无标签", "cfontsize": 10, "color": "#bbb", "padding": "0 12px"}}

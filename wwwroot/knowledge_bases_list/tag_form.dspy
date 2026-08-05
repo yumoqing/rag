@@ -4,53 +4,82 @@ ns = params_kw.copy()
 doc_id = ns.get('doc_id', '')
 kb_id = ns.get('kb_id', '')
 kind = ns.get('kind', '')
+media_type = 'document'
 
 db = DBPools()
 dbname = get_module_dbname('rag')
 
 fname = ''
-cur_tags = []
+tag_names_by_id = {}   # map tag_id -> {"name":..., "color":...}
+cur_tag_ids = []        # ids already on this document
+all_tags = []            # all tags for kb: list of (id, name, color)
+
 try:
     async with db.sqlorContext(dbname) as sor:
         recs = await sor.sqlExe(
-            "SELECT file_name, metadata FROM documents WHERE id=${id}$ AND kb_id=${kb_id}$",
+            "SELECT file_name FROM documents WHERE id=${id}$ AND kb_id=${kb_id}$",
             {"id": doc_id, "kb_id": kb_id})
         if recs:
             fname = recs[0].file_name or ''
-            try:
-                meta = json.loads(recs[0].metadata or '{}')
-            except Exception:
-                meta = {}
-            cur_tags = meta.get('tags', [])
-            if not isinstance(cur_tags, list):
-                cur_tags = []
+
+        # 有哪些标签
+        tag_recs = await sor.sqlExe(
+            "SELECT id, name, color FROM tags WHERE kb_id=${kb_id}$ ORDER BY created_at",
+            {"kb_id": kb_id})
+        for t in tag_recs:
+            all_tags.append((t.id, t.name, t.color or '#3b82f6'))
+            tag_names_by_id[t.id] = {"name": t.name, "color": t.color or '#3b82f6'}
+
+        # 当前已关联的
+        mt_recs = await sor.sqlExe(
+            "SELECT tag_id FROM media_tags WHERE media_type=${type}$ AND media_id=${mid}$",
+            {"type": media_type, "mid": doc_id})
+        cur_tag_ids = [r.tag_id for r in mt_recs]
 except Exception:
     pass
 
-subwidgets = []
-if not doc_id:
-    subwidgets.append({"widgettype": "Text", "options": {"text": "缺少 doc_id 参数", "cfontsize": 13, "color": "#e74c3c", "padding": "20px"}})
-else:
-    subwidgets.append({"widgettype": "Text", "options": {"text": "📄 " + (fname or doc_id), "cfontsize": 13, "fontWeight": "bold", "color": "#333", "padding": "0 0 8px 0"}})
-    if cur_tags:
-        tws = []
-        for t in cur_tags:
-            tws.append({"widgettype": "Text", "options": {"text": "#" + str(t), "cfontsize": 10, "color": "#1565c0", "bgcolor": "#e3f2fd", "padding": "1px 8px", "borderRadius": "8px", "margin": "2px 6px 2px 0"}})
-        subwidgets.append({"widgettype": "HBox", "options": {"wrap": True, "alignItems": "center", "marginBottom": "8px"}, "subwidgets": tws})
-    else:
-        subwidgets.append({"widgettype": "Text", "options": {"text": "暂无标签", "cfontsize": 11, "color": "#aaa", "marginBottom": "8px"}})
-    subwidgets.append({
-        "widgettype": "Form",
-        "id": "tag_input_form",
-        "options": {
-            "cols": 1,
-            "fields": [
-                {"name": "tag", "label": "标签名", "uitype": "str", "required": True}
-            ],
-            "buttons": [{"name": "submit", "label": "✓ 添加标签", "icon": "save"}]
-        }
+# 构建 checkbox 行
+tag_rows = []
+for i, (tid, tname, tcolor) in enumerate(all_tags):
+    checked = tid in cur_tag_ids
+    tag_rows.append({
+        "widgettype": "HBox",
+        "id": "tagrow_" + tid,
+        "options": {"data-sel": "1" if checked else "0", "margin": "3px 0", "padding": "4px 8px",
+                     "borderRadius": "6px", "alignItems": "center",
+                     "cursor": "pointer", "width": "100%",
+                     "bgcolor": "#e8f0fe" if checked else "#f8f9fa"},
+        "subwidgets": [
+            {"widgettype": "Text", "id": "tagchk_" + tid,
+             "options": {"text": "\u2611" if checked else "\u2610",
+                         "cfontsize": 14, "cwidth": 3, "halign": "center",
+                         "color": "#1565c0" if checked else "#999",
+                         "padding": "0 6px 0 0"}},
+            {"widgettype": "Text",
+             "options": {"text": "#" + tname, "cfontsize": 12,
+                         "color": "#1565c0", "bgcolor": "#e3f2fd",
+                         "padding": "2px 10px", "borderRadius": "10px",
+                         "margin": "0 4px 0 0"}}
+        ],
+        "binds": [{
+            "wid": "self", "event": "click",
+            "actiontype": "script",
+            "script": (
+                "var el=this.dom_element;"
+                "var on=el.getAttribute('data-sel')==='1';el.setAttribute('data-sel',on?'0':'1');"
+                "var c=el.querySelector('[id^=tagchk_]');if(c)c.textContent=on?'\u2610':'\u2611';"
+                "el.style.backgroundColor=on?'#f8f9fa':'#e8f0fe';"
+                "var tc=c?c.nextElementSibling:null;if(tc)tc.style.color=on?'#999':'#1565c0';"
+            )
+        }]
     })
 
+if not tag_rows:
+    tag_rows.append({"widgettype": "Text",
+                     "options": {"text": "该知识库暂无标签，请在下方创建", "cfontsize": 12,
+                                 "color": "#aaa", "halign": "center", "padding": "12px"}})
+
+# 父面板刷新,js
 refresh_js = ''
 if kind:
     refresh_js = ("var mp=document.querySelector('#media_card_panel');"
@@ -58,25 +87,98 @@ if kind:
                   + kb_id + "&kind=" + kind + "').then(function(r){return r.json()}).then(function(d){"
                   "var mw=mp.bricks_widget;mw.clear_widgets();bricks.widgetBuild(d,mw).then(function(nw){if(nw)mw.add_widget(nw)})}).catch(function(){})};")
 
-tag_script = ("var d=event&&event.params?event.params:{};if(!d||!d.tag){alert('请输入标签名');return};"
-              "var u='/rag/knowledge_bases_list/add_tag.dspy?doc_id=" + doc_id + "&kb_id=" + kb_id + "'+'&tag='+encodeURIComponent(d.tag);"
-              "fetch(u).then(function(r){return r.text()}).then(function(t){var d2={};try{d2=JSON.parse(t)}catch(e){};"
-              "if(d2&&d2.status==='SUCCEEDED'){" + refresh_js +
-              "var pw=null;var w=this;while(w){if(w instanceof bricks.PopupWindow||w instanceof bricks.Popup){pw=w;break};w=w.parent};"
-              "if(pw){pw.dismiss();pw.destroy()}else{alert('标签已添加：'+d2.added)}}"
-              "else{alert('添加失败：'+((d2&&d2.error)||t))}}.bind(this)).catch(function(){alert('网络错误')})")
+close_popup_js = (
+    "var pw=null;var w=this;"
+    "while(w){if(w instanceof bricks.PopupWindow||w instanceof bricks.Popup){pw=w;break};w=w.parent};"
+    "if(pw){pw.dismiss();pw.destroy()};"
+)
+
+# 关闭弹窗的快捷函数
+close_js = "function closeP(w){var pw=null;while(w){if(w instanceof bricks.PopupWindow||w instanceof bricks.Popup){pw=w;break};w=w.parent};if(pw){pw.dismiss();pw.destroy()}}"
+
+# + 按钮脚本：创建新标签
+add_tag_js = ("var inp=document.querySelector('#new_tag_input');"
+              "var name=(inp.value||'').trim();"
+              "if(!name){alert('请输入新标签名');return;};"
+              "fetch('/api/tag/create?kb_id=" + kb_id + "&name='+encodeURIComponent(name)).then(function(r){return r.json()}).then(function(d){"
+              "if(d&&d.status==='SUCCEEDED'){"
+              "if(d.duplicate){alert('标签「'+d.name+'」已存在');}"
+              "var tid=(d.tag_id||'');"
+              "var tname=(d.name||name);"
+              "var tcolor=(d.color||'#3b82f6');"
+              "var panel=document.querySelector('#tag_list_panel');"
+              "if(panel&&tid){"
+              "var exist=panel.querySelector('#tagrow_'+tid);"
+              "if(exist){exist.setAttribute('data-sel','1');exist.style.backgroundColor='#e8f0fe';"
+              "var ec=exist.querySelector('[id^=tagchk_]');if(ec){ec.textContent='\u2611';ec.style.color='#1565c0';}}"
+              "else{"
+              "var row=document.createElement('div');"
+              "row.setAttribute('data-sel','1');row.id='tagrow_'+tid;"
+              "row.style.cssText='display:flex;align-items:center;margin:3px 0;padding:4px 8px;border-radius:6px;width:100%;cursor:pointer;background:#e8f0fe';"
+              "row.onclick=function(){var el=this;var on=el.getAttribute('data-sel')==='1';el.setAttribute('data-sel',on?'0':'1');var c=el.querySelector('[id^=tagchk_]');if(c)c.textContent=on?'\u2610':'\u2611';el.style.backgroundColor=on?'#f8f9fa':'#e8f0fe';var tc=c?c.nextElementSibling:null;if(tc)tc.style.color=on?'#999':'#1565c0';};"
+              "var chk=document.createElement('span');chk.id='tagchk_'+tid;chk.style.cssText='font-size:14px;width:3em;text-align:center;color:#1565c0;padding-right:6px';chk.textContent='\u2611';"
+              "var lbl=document.createElement('span');lbl.style.cssText='font-size:12px;color:#1565c0;background:#e3f2fd;padding:2px 10px;border-radius:10px';lbl.textContent='#'+tname;"
+              "row.appendChild(chk);row.appendChild(lbl);panel.appendChild(row);}}"
+              "inp.value='';}"
+              "else{alert('创建失败：'+(d&&d.error||'未知错误'));}"
+              "}).catch(function(){alert('网络错误')});")
+
+# 提交按钮脚本
+submit_js = ("var rows=document.querySelectorAll('#tag_list_panel [data-sel]');"
+             "var ids=[];rows.forEach(function(r){if(r.getAttribute('data-sel')==='1'){ids.push(r.id.replace('tagrow_',''))}});"
+             "if(ids.length===0){alert('请至少勾选一个标签');return};"
+             "fetch('/api/tag/sync?kb_id=" + kb_id + "&media_type=document&media_id=" + doc_id + "&tag_ids='+encodeURIComponent(ids.join(',')))"
+             ".then(function(r){return r.json()}).then(function(d){"
+             "if(d&&d.status==='SUCCEEDED'){" + refresh_js + "alert('已保存：新增 '+d.added+' 个，移除 '+d.removed+' 个');" + close_popup_js + "}"
+             "else{alert('保存失败：'+(d&&d.error||'未知错误'));}"
+             "}).catch(function(){alert('网络错误')});")
+
+# 组合弹窗内容
+subwidgets = []
+subwidgets.append({"widgettype": "Text", "options": {"text": "\U0001f4c4 " + (fname or doc_id),
+                   "cfontsize": 13, "fontWeight": "bold", "color": "#333", "padding": "0 0 4px 0"}})
+subwidgets.append({"widgettype": "Text", "options": {"text": "勾选要添加的标签（可多选）：",
+                   "cfontsize": 11, "color": "#666", "padding": "0 0 4px 0"}})
+
+# 标签列表面板
+tag_list_box = {"widgettype": "VBox", "id": "tag_list_panel",
+                "options": {"css": "filler", "overflow": "auto", "padding": "4px",
+                            "border": "1px solid #e0e0e0", "borderRadius": "8px",
+                            "bgcolor": "#fcfcfc"},
+                "subwidgets": tag_rows}
+subwidgets.append(tag_list_box)
+
+# 新标签输入行
+new_tag_row = {"widgettype": "HBox", "options": {"alignItems": "center", "margin": "10px 0", "spacing": "6px"},
+               "subwidgets": [
+                   {"widgettype": "Html", "options": {
+                       "html": "<input id='new_tag_input' type='text' placeholder='\u8f93\u5165\u65b0\u6807\u7b7e\u540d' style='flex:1;padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:13px;outline:none'>",
+                       "width": "100%"}},
+                   {"widgettype": "Button", "id": "btn_add_tag",
+                    "options": {"label": "\uff0b", "cfontsize": 14, "fontWeight": "bold",
+                                "bgcolor": "#e3f2fd", "color": "#1565c0",
+                                "padding": "5px 14px", "borderRadius": "6px"},
+                    "binds": [{"wid": "self", "event": "click",
+                               "actiontype": "script", "script": add_tag_js}]}
+               ]}
+subwidgets.append(new_tag_row)
+
+# 提交按钮
+subwidgets.append({"widgettype": "HBox", "options": {"alignItems": "center"},
+                   "subwidgets": [
+                       {"widgettype": "Text", "options": {"text": "", "css": "filler"}},
+                       {"widgettype": "Button", "id": "btn_submit",
+                        "options": {"label": "\u2705 \u4fdd\u5b58\u6240\u9009\u6807\u7b7e",
+                                    "cfontsize": 13, "fontWeight": "bold",
+                                    "bgcolor": "#1565c0", "color": "#fff",
+                                    "padding": "7px 20px", "borderRadius": "6px"},
+                        "binds": [{"wid": "self", "event": "click",
+                                   "actiontype": "script", "script": submit_js}]}
+                   ]})
 
 result = {
     "widgettype": "VBox",
-    "options": {"width": "100%", "padding": "16px", "spacing": "6px"},
-    "subwidgets": subwidgets,
-    "binds": [
-        {
-            "wid": "tag_input_form",
-            "event": "submit",
-            "actiontype": "script",
-            "script": tag_script
-        }
-    ]
+    "options": {"width": "100%", "padding": "12px", "spacing": "4px"},
+    "subwidgets": subwidgets
 }
 return result
