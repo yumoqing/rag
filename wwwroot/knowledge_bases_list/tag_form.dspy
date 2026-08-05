@@ -1,0 +1,82 @@
+import json
+
+ns = params_kw.copy()
+doc_id = ns.get('doc_id', '')
+kb_id = ns.get('kb_id', '')
+kind = ns.get('kind', '')
+
+db = DBPools()
+dbname = get_module_dbname('rag')
+
+fname = ''
+cur_tags = []
+try:
+    async with db.sqlorContext(dbname) as sor:
+        recs = await sor.sqlExe(
+            "SELECT file_name, metadata FROM documents WHERE id=${id}$ AND kb_id=${kb_id}$",
+            {"id": doc_id, "kb_id": kb_id})
+        if recs:
+            fname = recs[0].file_name or ''
+            try:
+                meta = json.loads(recs[0].metadata or '{}')
+            except Exception:
+                meta = {}
+            cur_tags = meta.get('tags', [])
+            if not isinstance(cur_tags, list):
+                cur_tags = []
+except Exception:
+    pass
+
+subwidgets = []
+if not doc_id:
+    subwidgets.append({"widgettype": "Text", "options": {"text": "缺少 doc_id 参数", "cfontsize": 13, "color": "#e74c3c", "padding": "20px"}})
+else:
+    subwidgets.append({"widgettype": "Text", "options": {"text": "📄 " + (fname or doc_id), "cfontsize": 13, "fontWeight": "bold", "color": "#333", "padding": "0 0 8px 0"}})
+    if cur_tags:
+        tws = []
+        for t in cur_tags:
+            tws.append({"widgettype": "Text", "options": {"text": "#" + str(t), "cfontsize": 10, "color": "#1565c0", "bgcolor": "#e3f2fd", "padding": "1px 8px", "borderRadius": "8px", "margin": "2px 6px 2px 0"}})
+        subwidgets.append({"widgettype": "HBox", "options": {"wrap": True, "alignItems": "center", "marginBottom": "8px"}, "subwidgets": tws})
+    else:
+        subwidgets.append({"widgettype": "Text", "options": {"text": "暂无标签", "cfontsize": 11, "color": "#aaa", "marginBottom": "8px"}})
+    subwidgets.append({
+        "widgettype": "Form",
+        "id": "tag_input_form",
+        "options": {
+            "cols": 1,
+            "fields": [
+                {"name": "tag", "label": "标签名", "uitype": "str", "required": True}
+            ],
+            "buttons": [{"name": "submit", "label": "✓ 添加标签", "icon": "save"}]
+        }
+    })
+
+refresh_js = ''
+if kind:
+    refresh_js = ("var mp=document.querySelector('#media_card_panel');"
+                  "if(mp&&mp.bricks_widget){fetch('/rag/knowledge_bases_list/media_cards.dspy?_webbricks_=1&kb_id="
+                  + kb_id + "&kind=" + kind + "').then(function(r){return r.json()}).then(function(d){"
+                  "var mw=mp.bricks_widget;mw.clear_widgets();bricks.widgetBuild(d,mw).then(function(nw){if(nw)mw.add_widget(nw)})}).catch(function(){})};")
+
+tag_script = ("var d=event&&event.params?event.params:{};if(!d||!d.tag){alert('请输入标签名');return};"
+              "var u='/rag/knowledge_bases_list/add_tag.dspy?doc_id=" + doc_id + "&kb_id=" + kb_id + "'+'&tag='+encodeURIComponent(d.tag);"
+              "fetch(u).then(function(r){return r.text()}).then(function(t){var d2={};try{d2=JSON.parse(t)}catch(e){};"
+              "if(d2&&d2.status==='SUCCEEDED'){" + refresh_js +
+              "var pw=null;var w=this;while(w){if(w instanceof bricks.PopupWindow||w instanceof bricks.Popup){pw=w;break};w=w.parent};"
+              "if(pw){pw.dismiss();pw.destroy()}else{alert('标签已添加：'+d2.added)}}"
+              "else{alert('添加失败：'+((d2&&d2.error)||t))}}.bind(this)).catch(function(){alert('网络错误')})")
+
+result = {
+    "widgettype": "VBox",
+    "options": {"width": "100%", "padding": "16px", "spacing": "6px"},
+    "subwidgets": subwidgets,
+    "binds": [
+        {
+            "wid": "tag_input_form",
+            "event": "submit",
+            "actiontype": "script",
+            "script": tag_script
+        }
+    ]
+}
+return result
