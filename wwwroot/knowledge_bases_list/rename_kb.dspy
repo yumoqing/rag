@@ -1,0 +1,20 @@
+ns = params_kw.copy()
+kb_id = ns.get('kb_id', '')
+name = ns.get('name', '').strip()
+desc = ns.get('description', '')
+
+if not kb_id or not name:
+    return json.dumps({"status": "error", "error": "kb_id and name required"}, ensure_ascii=False)
+
+env = request._run_ns
+userorgid = await env.get_userorgid()
+
+async with get_sor_context(env, 'rag') as sor:
+    await sor.sqlExe(
+        "UPDATE knowledge_bases SET name=${name}$, description=${desc}$, updated_at=NOW() "
+        "WHERE id=${id}$ AND org_id=${org_id}$",
+        {"name": name, "desc": desc, "id": kb_id, "org_id": userorgid})
+
+# Reload KB list page
+return {"widgettype": "urlwidget",
+        "options": {"url": entire_url('/rag/knowledge_bases_list/index.ui')}}

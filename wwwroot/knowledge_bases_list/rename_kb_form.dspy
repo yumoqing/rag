@@ -1,0 +1,51 @@
+ns = params_kw.copy()
+kb_id = ns.get('kb_id', '')
+name = ns.get('name', '')
+desc = ns.get('description', '')
+
+if not kb_id:
+    return json.dumps({"status": "error", "error": "kb_id required"}, ensure_ascii=False)
+
+env = request._run_ns
+
+if not name:
+    async with get_sor_context(env, 'rag') as sor:
+        recs = await sor.sqlExe(
+            "SELECT name, description FROM knowledge_bases WHERE id=${id}$",
+            {"id": kb_id})
+        if recs:
+            name = recs[0].name or ''
+            desc = recs[0].description or ''
+
+result = {
+    "widgettype": "VBox",
+    "options": {"padding": "16px", "spacing": "12px", "width": "100%"},
+    "subwidgets": [
+        {"widgettype": "Text", "options": {"text": "重命名知识库", "cfontsize": 16, "fontWeight": "bold",
+                                           "color": "#333", "padding": "0 0 8px 0"}},
+        {
+            "widgettype": "Form",
+            "id": "rename_form",
+            "options": {
+                "cols": 1,
+                "fields": [
+                    {"name": "name", "label": "名称", "uitype": "str", "required": True,
+                     "defaultValue": name},
+                    {"name": "description", "label": "描述", "uitype": "text",
+                     "defaultValue": desc},
+                    {"name": "kb_id", "uitype": "hide", "value": kb_id}
+                ],
+                "submit_label": "保存"
+            }
+        }
+    ],
+    "binds": [{
+        "wid": "rename_form",
+        "event": "submit",
+        "actiontype": "urlwidget",
+        "target": "app.rag_main_content",
+        "mode": "replace",
+        "options": {"url": "{{entire_url('./rename_kb.dspy')}}"}
+    }]
+}
+return result

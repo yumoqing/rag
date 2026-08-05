@@ -1,0 +1,76 @@
+ns = params_kw.copy()
+kb_id = ns.get('kb_id', '')
+
+if not kb_id:
+    return json.dumps({"status": "error", "error": "kb_id required"}, ensure_ascii=False)
+
+env = request._run_ns
+userorgid = await env.get_userorgid()
+deleted = {"documents": 0, "chunks": 0, "tags": 0, "media_tags": 0, "files": 0}
+
+async with get_sor_context(env, 'rag') as sor:
+    # Check owner
+    kb = await sor.sqlExe(
+        "SELECT id, name FROM knowledge_bases WHERE id=${id}$ AND org_id=${org_id}$",
+        {"id": kb_id, "org_id": userorgid})
+    if not kb:
+        return json.dumps({"status": "error", "error": "knowledge base not found or access denied"}, ensure_ascii=False)
+
+    # Get all doc IDs and file paths for physical cleanup
+    docs = await sor.sqlExe(
+        "SELECT id, file_path FROM documents WHERE kb_id=${kb_id}$",
+        {"kb_id": kb_id})
+    doc_ids = [d.id for d in docs]
+
+    if doc_ids:
+        # Delete chunks
+        await sor.sqlExe(
+            "DELETE FROM document_chunks WHERE doc_id IN (${ids}$)",
+            {"ids": doc_ids})
+        deleted["chunks"] = len(doc_ids)
+
+    # Delete media_tags
+    mt = await sor.sqlExe(
+        "SELECT COUNT(*) AS cnt FROM media_tags WHERE kb_id=${kb_id}$",
+        {"kb_id": kb_id})
+    await sor.sqlExe(
+        "DELETE FROM media_tags WHERE kb_id=${kb_id}$",
+        {"kb_id": kb_id})
+    deleted["media_tags"] = mt[0].cnt if mt else 0
+
+    # Delete tags
+    t = await sor.sqlExe(
+        "SELECT COUNT(*) AS cnt FROM tags WHERE kb_id=${kb_id}$",
+        {"kb_id": kb_id})
+    await sor.sqlExe(
+        "DELETE FROM tags WHERE kb_id=${kb_id}$",
+        {"kb_id": kb_id})
+    deleted["tags"] = t[0].cnt if t else 0
+
+    # Delete documents
+    await sor.sqlExe(
+        "DELETE FROM documents WHERE kb_id=${kb_id}$",
+        {"kb_id": kb_id})
+    deleted["documents"] = len(doc_ids)
+
+    # Delete the KB itself
+    await sor.sqlExe(
+        "DELETE FROM knowledge_bases WHERE id=${id}$",
+        {"id": kb_id})
+    deleted["kb_name"] = str(kb[0].name)
+
+# Delete physical files
+for d in docs:
+    fp = d.file_path or ''
+    if fp and fp.startswith("/idfile/"):
+        try:
+            real_path = env.realpath(fp)
+            if os.path.exists(real_path):
+                os.remove(real_path)
+                deleted["files"] += 1
+        except Exception:
+            pass
+
+return json.dumps({"status": "SUCCEEDED", "kb_name": str(kb[0].name),
+                  "documents": deleted["documents"], "files_removed": deleted["files"],
+                  "tags": deleted["tags"]}, ensure_ascii=False)
