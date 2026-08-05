@@ -16,19 +16,14 @@ async with get_sor_context(env, 'rag') as sor:
         engine = r.embedding_engine or "CLIP"
         idstr = str(r.id)
         namestr = r.name or ''
+        safe_name = json.dumps(namestr, ensure_ascii=False)
         cards.append({
             "widgettype": "VBox",
             "options": {"cwidth": 16, "cheight": 12, "bgcolor": "#f0f7ff", "padding": "12px",
-                         "css": "card", "border": "1px solid #d0e4f7"},
+                         "css": "card clickable", "border": "1px solid #d0e4f7"},
             "subwidgets": [
-                # Name row (clickable to enter KB)
                 {"widgettype": "Text", "options": {"text": "\U0001f4da " + namestr,
-                     "cfontsize": 16, "fontWeight": "bold", "css": "clickable"},
-                 "binds": [{"wid": "self", "event": "click", "actiontype": "urlwidget",
-                            "target": "app.rag_main_content", "mode": "replace",
-                            "options": {"url": "/rag/knowledge_bases_list/detail.ui",
-                                        "params": {"kb_id": idstr, "kb_name": namestr}}}]},
-                # Meta info
+                     "cfontsize": 16, "fontWeight": "bold"}},
                 {"widgettype": "Text", "options": {"text": str(engine) + " \u00b7 1024\u7ef4",
                      "cfontsize": 12, "color": "#888", "padding": "2px 0 6px 0"}},
                 {"widgettype": "HBox", "options": {"spacing": "12px", "padding": "0 0 8px 0"}, "subwidgets": [
@@ -37,29 +32,38 @@ async with get_sor_context(env, 'rag') as sor:
                     {"widgettype": "Text", "options": {"text": "\U0001f4be " + size_str,
                          "cfontsize": 12, "color": "#666"}}
                 ]},
-                # Action buttons row
                 {"widgettype": "HBox", "options": {"justifyContent": "flex-end", "spacing": "6px",
                      "padding": "4px 0 0 0", "borderTop": "1px solid #e8f0fe"}, "subwidgets": [
                     {"widgettype": "Text", "options": {"text": "\u270f\ufe0f \u91cd\u547d\u540d",
                          "cfontsize": 12, "color": "#4a90d9", "css": "clickable",
                          "padding": "2px 8px", "borderRadius": "4px", "bgcolor": "#e3f0fb"},
-                     "binds": [{"wid": "self", "event": "click", "actiontype": "urlwidget",
-                                "target": "PopupWindow",
-                                "popup_options": {"title": "\u91cd\u547d\u540d\u300c" + namestr + "\u300d",
-                                                   "width": "30%", "height": "auto",
-                                                   "movable": True, "resizable": True, "modal": True},
-                                "options": {"url": "/rag/knowledge_bases_list/rename_kb_form.dspy?kb_id=" + idstr}}]},
+                     "binds": [
+                         {"wid": "self", "event": "click", "actiontype": "script",
+                          "script": "event.stopPropagation()"},
+                         {"wid": "self", "event": "click", "actiontype": "urlwidget",
+                          "target": "PopupWindow",
+                          "popup_options": {"title": "\u91cd\u547d\u540d\u300c" + namestr + "\u300d",
+                                             "width": "30%", "height": "auto",
+                                             "movable": True, "resizable": True, "modal": True},
+                          "options": {"url": "/rag/knowledge_bases_list/rename_kb_form.dspy?kb_id=" + idstr}}
+                     ]},
                     {"widgettype": "Text", "options": {"text": "\U0001f5d1\ufe0f \u5220\u9664",
                          "cfontsize": 12, "color": "#e74c3c", "css": "clickable",
                          "padding": "2px 8px", "borderRadius": "4px", "bgcolor": "#fee"},
                      "binds": [{"wid": "self", "event": "click", "actiontype": "script",
-                                "script": "if(!confirm('\u786e\u8ba4\u5220\u9664\u77e5\u8bc6\u5e93\u300c" + namestr + "\u300d\uff1f\n\n\u8be5\u64cd\u4f5c\u4f1a\u5220\u9664\u77e5\u8bc6\u5e93\u5185\u6240\u6709\u6587\u4ef6\u3001\u6807\u7b7e\u548c\u6570\u636e\uff0c\u4e0d\u53ef\u6062\u590d\uff01'))return;\n"
-                                "var u='/rag/knowledge_bases_list/delete_kb.dspy?kb_id=" + idstr + "';\n"
-                                "fetch(u).then(function(r){return r.json()}).then(function(d){\n"
-                                "if(d.status==='error'){alert('\u5220\u9664\u5931\u8d25\uff1a'+d.error);return;}\n"
-                                "window.location.href='/rag/knowledge_bases_list/index.ui';\n"
+                                "script": "event.stopPropagation();"
+                                "if(!confirm('\u786e\u8ba4\u5220\u9664\u77e5\u8bc6\u5e93\u300c" + namestr + "\u300d\uff1f\n\n\u8be5\u64cd\u4f5c\u4f1a\u5220\u9664\u77e5\u8bc6\u5e93\u5185\u6240\u6709\u6587\u4ef6\u3001\u6807\u7b7e\u548c\u6570\u636e\uff0c\u4e0d\u53ef\u6062\u590d\uff01'))return;"
+                                "fetch('/rag/knowledge_bases_list/delete_kb.dspy?kb_id=" + idstr + "').then(function(r){return r.json()}).then(function(d){"
+                                "if(d.status==='error'){alert('\u5220\u9664\u5931\u8d25\uff1a'+d.error);return;}"
+                                "window.location.href='/rag/knowledge_bases_list/index.ui';"
                                 "}).catch(function(){alert('\u7f51\u7edc\u9519\u8bef')});"}]}
                 ]}
+            ],
+            "binds": [
+                {"wid": "self", "event": "click", "actiontype": "urlwidget",
+                 "target": "app.rag_main_content", "mode": "replace",
+                 "options": {"url": "/rag/knowledge_bases_list/detail.ui",
+                             "params": {"kb_id": idstr, "kb_name": namestr}}}
             ]
         })
 

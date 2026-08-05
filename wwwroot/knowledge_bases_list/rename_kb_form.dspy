@@ -45,7 +45,7 @@ result = {
         "actiontype": "urlwidget",
         "target": "app.rag_main_content",
         "mode": "replace",
-        "options": {"url": "{{entire_url('./rename_kb.dspy')}}"}
+        "options": {"url": entire_url('./rename_kb.dspy')}
     }]
 }
 return result
