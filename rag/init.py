@@ -321,15 +321,9 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
             return json.dumps({"error": "storage_quota_exceeded",
                 "message": "存储配额超限：机构已用 " + _fmt_bytes(used) + "，限额 " + _fmt_bytes(quota_limit) + "，本文件 " + _fmt_bytes(file_size)}, ensure_ascii=False)
 
-        # Save file
+        # Save file via FileStorage (layered dir layout, returns web path e.g. /191/193/197/97/xxx.txt)
         doc_id = uuid.uuid4().hex[:16]
-        ext = os.path.splitext(file_name)[1] or ".bin"
-        saved_name = f"{doc_id}{ext}"
-        files_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files")
-        os.makedirs(files_dir, exist_ok=True)
-        file_path = os.path.join(files_dir, saved_name)
-        with open(file_path, "wb") as f:
-            f.write(file_data)
+        web_path = await env.save_file(file_data, file_name)
 
         file_type = _detect_file_type(file_name, "application/octet-stream")
 
@@ -339,7 +333,7 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
                 "INSERT INTO documents (id, kb_id, file_name, file_type, file_size, file_path, mime_type, status, org_id, created_at, updated_at) "
                 "VALUES (${id}$, ${kb_id}$, ${file_name}$, ${file_type}$, ${file_size}$, ${file_path}$, ${mime_type}$, 'pending', ${org_id}$, NOW(), NOW())",
                 {"id": doc_id, "kb_id": kb_id, "file_name": file_name, "file_type": file_type,
-                 "file_size": file_size, "file_path": "/idfile/files/" + saved_name,
+                 "file_size": file_size, "file_path": web_path,
                  "mime_type": "application/octet-stream", "org_id": userorgid})
 
             # Update KB stats

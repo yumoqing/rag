@@ -50,10 +50,7 @@ header = {
     "subwidgets": [
         {"widgettype": "Text", "options": {"text": "📄 " + folder_label, "cfontsize": 14, "fontWeight": "bold", "color": "#333"}},
         {"widgettype": "Text", "options": {"text": "（" + str(len(rows)) + " 个文件）", "cfontsize": 12, "color": "#999", "marginLeft": "8px"}},
-        {"widgettype": "Text", "options": {"text": "", "css": "filler"}},
-        {"widgettype": "Button", "options": {"label": "📊 分析结果", "cfontsize": 12, "bgcolor": "#ede7f6", "color": "#4527a0", "padding": "4px 12px", "borderRadius": "14px", "marginLeft": "8px"},
-         "binds": [{"wid": "self", "event": "click", "actiontype": "urlwidget", "target": "file_list_panel", "mode": "replace",
-                     "options": {"url": "./analysis.dspy?kb_id=" + kb_id}}]}
+        {"widgettype": "Text", "options": {"text": "", "css": "filler"}}
     ]
 }
 
@@ -89,7 +86,7 @@ else:
                 {"widgettype": "Text", "options": {"text": st, "cfontsize": 11, "color": sc, "cwidth": 6, "halign": "center"}},
                 {"widgettype": "Text", "options": {"text": f["created_at"], "cfontsize": 11, "color": "#999", "cwidth": 13, "halign": "center"}},
                 {
-                    "widgettype": "HBox", "options": {"spacing": "6px"},
+                    "widgettype": "HBox", "options": {"spacing": "14px"},
                     "subwidgets": [
                         {"widgettype": "Text", "options": {"text": "👁", "cfontsize": 14, "css": "clickable", "color": "#4a90d9", "title": "查看"},
                          "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self",
