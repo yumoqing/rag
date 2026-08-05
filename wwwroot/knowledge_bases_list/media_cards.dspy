@@ -13,16 +13,16 @@ try:
         if kind == 'voice':
             recs = await sor.sqlExe(
                 "SELECT id, file_name, file_path, metadata, created_at FROM documents "
-                "WHERE kb_id=${kb_id}$ AND (LOWER(file_name) LIKE '%.mp3' OR LOWER(file_name) LIKE '%.wav' "
-                "OR LOWER(file_name) LIKE '%.m4a' OR LOWER(file_name) LIKE '%.aac' OR LOWER(file_name) LIKE '%.ogg' "
-                "OR LOWER(file_name) LIKE '%.flac') ORDER BY created_at DESC",
+                "WHERE kb_id=${kb_id}$ AND (LOWER(file_name) LIKE '%%.mp3' OR LOWER(file_name) LIKE '%%.wav' "
+                "OR LOWER(file_name) LIKE '%%.m4a' OR LOWER(file_name) LIKE '%%.aac' OR LOWER(file_name) LIKE '%%.ogg' "
+                "OR LOWER(file_name) LIKE '%%.flac') ORDER BY created_at DESC",
                 {"kb_id": kb_id})
         else:
             recs = await sor.sqlExe(
                 "SELECT id, file_name, file_path, metadata, created_at FROM documents "
-                "WHERE kb_id=${kb_id}$ AND (LOWER(file_name) LIKE '%.jpg' OR LOWER(file_name) LIKE '%.jpeg' "
-                "OR LOWER(file_name) LIKE '%.png' OR LOWER(file_name) LIKE '%.gif' OR LOWER(file_name) LIKE '%.webp' "
-                "OR LOWER(file_name) LIKE '%.bmp') ORDER BY created_at DESC",
+                "WHERE kb_id=${kb_id}$ AND (LOWER(file_name) LIKE '%%.jpg' OR LOWER(file_name) LIKE '%%.jpeg' "
+                "OR LOWER(file_name) LIKE '%%.png' OR LOWER(file_name) LIKE '%%.gif' OR LOWER(file_name) LIKE '%%.webp' "
+                "OR LOWER(file_name) LIKE '%%.bmp') ORDER BY created_at DESC",
                 {"kb_id": kb_id})
         for r in recs:
             rows.append({
