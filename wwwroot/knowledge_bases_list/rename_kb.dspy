@@ -12,7 +12,7 @@ userorgid = await env.get_userorgid()
 async with get_sor_context(env, 'rag') as sor:
     await sor.sqlExe(
         "UPDATE knowledge_bases SET name=${name}$, description=${desc}$, updated_at=NOW() "
-        "WHERE id=${id}$ AND org_id=${org_id}$",
+        "WHERE id=${id}$ AND (org_id=${org_id}$ OR org_id IS NULL)",
         {"name": name, "desc": desc, "id": kb_id, "org_id": userorgid})
 
 # Reload KB list page

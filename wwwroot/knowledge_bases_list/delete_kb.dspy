@@ -11,7 +11,7 @@ deleted = {"documents": 0, "chunks": 0, "tags": 0, "media_tags": 0, "files": 0}
 async with get_sor_context(env, 'rag') as sor:
     # Check owner
     kb = await sor.sqlExe(
-        "SELECT id, name FROM knowledge_bases WHERE id=${id}$ AND org_id=${org_id}$",
+        "SELECT id, name FROM knowledge_bases WHERE id=${id}$ AND (org_id=${org_id}$ OR org_id IS NULL)",
         {"id": kb_id, "org_id": userorgid})
     if not kb:
         return json.dumps({"status": "error", "error": "knowledge base not found or access denied"}, ensure_ascii=False)
