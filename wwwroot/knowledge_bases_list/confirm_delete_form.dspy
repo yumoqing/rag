@@ -23,9 +23,8 @@ result = {
                          "script": "var pw=null;var w=this;while(w){if(w instanceof bricks.PopupWindow||w instanceof bricks.Popup){pw=w;break};w=w.parent};if(pw){pw.dismiss();pw.destroy()}"}]},
              {"widgettype": "Button", "options": {"label": "\u786e\u8ba4\u5220\u9664",
                   "bgcolor": "#e74c3c", "color": "#fff", "padding": "6px 20px", "borderRadius": "6px"},
-              "binds": [{"wid": "self", "event": "click", "actiontype": "urlwidget",
-                         "target": "app.rag_main_content", "mode": "replace",
-                         "options": {"url": "/rag/knowledge_bases_list/delete_kb.dspy?kb_id=" + kb_id}}]}
+              "binds": [{"wid": "self", "event": "click", "actiontype": "script",
+                         "script": "var pw=null;var w=this;while(w){if(w instanceof bricks.PopupWindow||w instanceof bricks.Popup){pw=w;break};w=w.parent};if(pw){pw.dismiss();pw.destroy()};window.location.href='/rag/knowledge_bases_list/delete_kb.dspy?kb_id=" + kb_id + "'"}]}
          ]}
     ]
 }

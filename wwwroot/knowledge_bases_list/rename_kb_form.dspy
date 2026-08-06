@@ -42,10 +42,15 @@ result = {
     "binds": [{
         "wid": "rename_form",
         "event": "submit",
-        "actiontype": "urlwidget",
-        "target": "app.rag_main_content",
-        "mode": "replace",
-        "options": {"url": entire_url('./rename_kb.dspy')}
+        "actiontype": "script",
+        "script": (
+            "var pw=null;var w=this;while(w){if(w instanceof bricks.PopupWindow||w instanceof bricks.Popup){pw=w;break};w=w.parent};if(pw){pw.dismiss();pw.destroy()};"
+            "var nm=(params.name||'').trim();"
+            "var did=params.kb_id||'';"
+            "var dc=params.description||'';"
+            "if(!nm||!did){alert('请填写名称');return};"
+            "fetch('/rag/knowledge_bases_list/rename_kb.dspy?kb_id='+encodeURIComponent(did)+'&name='+encodeURIComponent(nm)+'&description='+encodeURIComponent(dc)).then(function(){window.location.href='/rag/knowledge_bases_list/index.ui'})"
+        )
     }]
 }
 return result
