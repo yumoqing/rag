@@ -30,9 +30,9 @@ result = {
                 "cols": 1,
                 "fields": [
                     {"name": "name", "label": "名称", "uitype": "str", "required": True,
-                     "defaultValue": name},
+                     "value": name},
                     {"name": "description", "label": "描述", "uitype": "text",
-                     "defaultValue": desc},
+                     "value": desc},
                     {"name": "kb_id", "uitype": "hide", "value": kb_id}
                 ],
                 "submit_label": "保存"
