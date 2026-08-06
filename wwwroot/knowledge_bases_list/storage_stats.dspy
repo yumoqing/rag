@@ -8,7 +8,9 @@ limit = 104857600
 docs = 0
 async with get_sor_context(env, 'rag') as sor:
     rec = await sor.sqlExe(
-        "SELECT COALESCE(SUM(file_size),0) AS used, COUNT(*) AS docs FROM documents WHERE org_id=${org_id}$",
+        "SELECT COALESCE(SUM(d.file_size),0) AS used, COUNT(*) AS docs "
+        "FROM documents d JOIN knowledge_bases k ON d.kb_id=k.id "
+        "WHERE k.org_id=${org_id}$",
         {"org_id": userorgid})
     if rec:
         used = int(rec[0].used)
