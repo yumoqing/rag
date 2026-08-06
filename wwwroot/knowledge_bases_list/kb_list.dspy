@@ -3,7 +3,7 @@ userorgid = await env.get_userorgid()
 cards = []
 async with get_sor_context(env, 'rag') as sor:
     recs = await sor.sqlExe(
-        "SELECT * FROM knowledge_bases WHERE org_id=${org_id}$ OR org_id IS NULL ORDER BY created_at DESC",
+        "SELECT * FROM knowledge_bases WHERE org_id=${org_id}$ ORDER BY created_at DESC",
         {"org_id": userorgid})
     for r in recs:
         doc_count = r.doc_count or 0

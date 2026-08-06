@@ -129,7 +129,7 @@ submit_js = ("var rows=document.querySelectorAll('#tag_list_panel [data-sel]');"
              "if(ids.length===0){alert('请至少勾选一个标签');return};"
              "fetch('/api/tag/sync?kb_id=" + kb_id + "&media_type=document&media_id=" + doc_id + "&tag_ids='+encodeURIComponent(ids.join(',')))"
              ".then(function(r){return r.json()}).then(function(d){"
-             "if(d&&d.status==='SUCCEEDED'){" + refresh_js + "alert('已保存：新增 '+d.added+' 个，移除 '+d.removed+' 个');" + close_popup_js + "}"
+             "if(d&&d.status==='SUCCEEDED'){" + close_popup_js + refresh_js + "}"
              "else{alert('保存失败：'+(d&&d.error||'未知错误'));}"
              "}).catch(function(){alert('网络错误')});")
 
