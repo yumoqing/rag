@@ -28,12 +28,13 @@ async with get_sor_context(env, 'rag') as sor:
                      "cfontsize": 16, "fontWeight": "bold"}},
                 {"widgettype": "Text", "options": {"text": str(engine) + " \u00b7 1024\u7ef4",
                      "cfontsize": 12, "color": "#888", "padding": "2px 0 6px 0"}},
-                {"widgettype": "HBox", "options": {"spacing": "12px", "padding": "0 0 8px 0"}, "subwidgets": [
+                {"widgettype": "HBox", "options": {"spacing": "12px", "padding": "0 0 4px 0"}, "subwidgets": [
                     {"widgettype": "Text", "options": {"text": "\U0001f4c4 " + str(doc_count) + "\u6587\u6863",
                          "cfontsize": 12, "color": "#666"}},
                     {"widgettype": "Text", "options": {"text": "\U0001f4be " + size_str,
                          "cfontsize": 12, "color": "#666"}}
                 ]},
+                {"widgettype": "Text", "options": {"text": "", "css": "filler"}},
                 {"widgettype": "HBox", "options": {"justifyContent": "flex-end", "spacing": "6px",
                      "padding": "4px 0 0 0", "borderTop": "1px solid #e8f0fe"}, "subwidgets": [
                     {"widgettype": "Text", "options": {"text": "\u270f\ufe0f \u91cd\u547d\u540d",
