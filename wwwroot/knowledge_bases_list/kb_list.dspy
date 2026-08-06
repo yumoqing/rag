@@ -1,7 +1,10 @@
 env = request._run_ns
+userorgid = await env.get_userorgid()
 cards = []
 async with get_sor_context(env, 'rag') as sor:
-    recs = await sor.R("knowledge_bases", {})
+    recs = await sor.sqlExe(
+        "SELECT * FROM knowledge_bases WHERE org_id=${org_id}$ OR org_id IS NULL ORDER BY created_at DESC",
+        {"org_id": userorgid})
     for r in recs:
         doc_count = r.doc_count or 0
         total_size = r.total_size or 0
@@ -16,7 +19,6 @@ async with get_sor_context(env, 'rag') as sor:
         engine = r.embedding_engine or "CLIP"
         idstr = str(r.id)
         namestr = r.name or ''
-        safe_name = json.dumps(namestr, ensure_ascii=False)
         cards.append({
             "widgettype": "VBox",
             "options": {"cwidth": 16, "cheight": 12, "bgcolor": "#f0f7ff", "padding": "12px",
@@ -75,5 +77,5 @@ if not cards:
     cards.append({"widgettype": "Text", "options": {
         "text": "\u6682\u65e0\u77e5\u8bc6\u5e93", "cfontsize": 14, "color": "#aaa", "halign": "center"}})
 
-return json.dumps({"widgettype": "HBox", "options": {"width": "100%", "spacing": "12px", "wrap": True},
+return json.dumps({"widgettype": "DynamicColumn", "options": {"width": "100%", "col_cwidth": 18, "col_cgap": 1},
                     "subwidgets": cards}, ensure_ascii=False, default=str)
