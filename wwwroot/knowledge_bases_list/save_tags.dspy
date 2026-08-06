@@ -2,6 +2,7 @@ ns = params_kw.copy()
 kb_id = ns.get('kb_id', '')
 doc_id = ns.get('media_id', '')
 tag_ids_str = ns.get('tag_ids', '')
+result=''
 
 close_btn = {"widgettype": "Button", "options": {"label": "\u5173\u95ed", "bgcolor": "#4a90d9", "color": "#fff", "padding": "5px 16px", "borderRadius": "6px"},
              "binds": [{"wid": "self", "event": "click", "actiontype": "script",
