@@ -142,7 +142,7 @@ subwidgets.append({"widgettype": "Text", "options": {"text": "勾选要添加的
 
 # 标签列表面板
 tag_list_box = {"widgettype": "VBox", "id": "tag_list_panel",
-                "options": {"css": "filler", "overflow": "auto", "padding": "4px",
+                "options": {"cheight": 14, "overflow": "auto", "padding": "4px",
                             "border": "1px solid #e0e0e0", "borderRadius": "8px",
                             "bgcolor": "#fcfcfc"},
                 "subwidgets": tag_rows}
