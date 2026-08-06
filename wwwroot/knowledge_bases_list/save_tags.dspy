@@ -1,0 +1,38 @@
+ns = params_kw.copy()
+kb_id = ns.get('kb_id', '')
+doc_id = ns.get('media_id', '')
+tag_ids_str = ns.get('tag_ids', '')
+
+if not kb_id or not doc_id:
+    result = {"widgettype": "Text", "options": {"text": "\u274c \u53c2\u6570\u7f3a\u5931",
+              "cfontsize": 14, "color": "#e74c3c", "halign": "center", "padding": "20px"}}
+else:
+    env = request._run_ns
+    try:
+        wanted_ids = [t.strip() for t in tag_ids_str.split(",") if t.strip()]
+        added = 0; removed = 0
+        async with get_sor_context(env, 'rag') as sor:
+            recs = await sor.sqlExe(
+                "SELECT id, tag_id FROM media_tags WHERE media_type='document' AND media_id=${mid}$",
+                {"mid": doc_id})
+            current = {r.tag_id: r.id for r in recs}
+            for tid, mt_id in list(current.items()):
+                if tid not in wanted_ids:
+                    await sor.sqlExe("DELETE FROM media_tags WHERE id=${id}$", {"id": mt_id})
+                    removed += 1
+            for tid in wanted_ids:
+                if tid not in current:
+                    mt_id = uuid.uuid4().hex[:16]
+                    await sor.sqlExe(
+                        "INSERT INTO media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
+                        "VALUES (${id}$, ${kb_id}$, 'document', ${mid}$, ${tid}$, NOW())",
+                        {"id": mt_id, "kb_id": kb_id, "mid": doc_id, "tid": tid})
+                    added += 1
+        msg = "\u2705 \u5df2\u4fdd\u5b58\uff1a\u65b0\u589e " + str(added) + " \u4e2a\uff0c\u79fb\u9664 " + str(removed) + " \u4e2a"
+        result = {"widgettype": "Text", "options": {"text": msg,
+                  "cfontsize": 14, "color": "#27ae60", "halign": "center", "padding": "20px"}}
+    except Exception as e:
+        result = {"widgettype": "Text", "options": {"text": "\u274c \u4fdd\u5b58\u5931\u8d25\uff1a" + str(e)[:100],
+                  "cfontsize": 14, "color": "#e74c3c", "halign": "center", "padding": "20px"}}
+
+return result
