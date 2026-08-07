@@ -31,7 +31,7 @@ else:
                     removed += 1
             for tid in wanted_ids:
                 if tid not in current:
-                    mt_id = getID(16)
+                    mt_id = getID(32)
                     await sor.sqlExe(
                         "INSERT INTO media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                         "VALUES (${id}$, ${kb_id}$, 'document', ${mid}$, ${tid}$, NOW())",
