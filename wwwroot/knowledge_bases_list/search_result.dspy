@@ -2,6 +2,7 @@ ns = params_kw.copy()
 kb_id = ns.get('kb_id', '')
 env = request._run_ns
 query = ns.get("query") or ns.get("value") or ns.get("keyword") or ns.get("text") or ""
+tag_ids_str = ns.get("tag_ids", "")
 # Defensive: legacy UI cached in browser double-encodes the keyword (%E5%88%86... arrives as-is).
 # Normal path: server already decoded once, no '%' present, this is a no-op.
 if "%" in query:
@@ -14,7 +15,7 @@ if "%" in query:
     except Exception:
         pass
 info(f'[search_result] params_kw={params_kw}')
-info(f'[search_result] parsed: kb_id={kb_id!r} query={query!r} method={request.method} url={request.url}')
+info(f'[search_result] parsed: kb_id={kb_id!r} query={query!r} tag_ids={tag_ids_str!r} method={request.method} url={request.url}')
 
 file_data = None
 file_name = None
@@ -41,6 +42,29 @@ if not query:
             {"widgettype": "Text", "options": {"text": "请输入检索内容", "color": "#666", "marginTop": "20px"}}
         ]
     }, ensure_ascii=False)
+
+# 0. Parse tag filter — find doc_ids that match ALL selected tags
+tag_doc_ids = None
+tag_info = ""
+if tag_ids_str:
+    wanted_tags = [t.strip() for t in tag_ids_str.split(",") if t.strip()]
+    if wanted_tags:
+        try:
+            async with get_sor_context(env, 'rag') as sor:
+                placeholders = []
+                nsq = {"kb_id": kb_id}
+                for i, tid in enumerate(wanted_tags):
+                    placeholders.append("${tid_" + str(i) + "}$")
+                    nsq["tid_" + str(i)] = tid
+                sql = ("SELECT media_id FROM media_tags "
+                       "WHERE kb_id=${kb_id}$ AND media_type='document' AND tag_id IN (" + ",".join(placeholders) + ") "
+                       "GROUP BY media_id HAVING COUNT(DISTINCT tag_id)=" + str(len(wanted_tags)))
+                recs = await sor.sqlExe(sql, nsq)
+                tag_doc_ids = set(r.media_id for r in recs)
+                tag_info = " (标签过滤: " + ",".join(wanted_tags[:3]) + ("..." if len(wanted_tags)>3 else "") + ")"
+                info(f'[search_result] tag filter: {len(tag_doc_ids)} docs match {len(wanted_tags)} tags')
+        except Exception as e:
+            info(f'[search_result] tag filter error: {e}')
 
 # 1. Embed
 vec = []
@@ -97,7 +121,6 @@ for row in raw_rows:
     doc_id = rid.rsplit('_c', 1)[0] if '_c' in rid else rid
     # Look up chunk text from DB
     chunk_text = ''
-    doc_name = ''
     async with get_sor_context(env, 'rag') as sor:
         recs = await sor.sqlExe(
             "SELECT content, doc_id FROM document_chunks WHERE id=${id}$",
@@ -105,12 +128,17 @@ for row in raw_rows:
         if recs:
             chunk_text = recs[0].content or ''
             doc_id = recs[0].doc_id or doc_id
+    # Tag filter
+    if tag_doc_ids is not None and doc_id not in tag_doc_ids:
+        continue
     if chunk_text:
         is_kw = rid in kw_ids
         hits.append({"id": rid, "doc_id": doc_id, "score": 0.99 if is_kw else score, "text": chunk_text, "kw": is_kw})
         seen.add(rid)
 for kr in kw_rows:
     if kr["id"] not in seen:
+        if tag_doc_ids is not None and kr["doc_id"] not in tag_doc_ids:
+            continue
         hits.append(kr)
         seen.add(kr["id"])
 
@@ -118,7 +146,7 @@ hits.sort(key=lambda x: x.get("score", 0), reverse=True)
 hits = hits[:top_k]
 
 subwidgets = [
-    {"widgettype": "Text", "options": {"text": f"🔍 检索: {query}", "cfontsize": 18, "fontWeight": "bold", "marginBottom": "8px"}},
+    {"widgettype": "Text", "options": {"text": f"🔍 检索: {query}{tag_info}", "cfontsize": 18, "fontWeight": "bold", "marginBottom": "8px"}},
     {"widgettype": "Text", "options": {"text": f"共 {len(hits)} 条结果 (召回 {len(raw_rows)} 条)", "cfontsize": 13, "color": "#888", "marginBottom": "16px"}}
 ]
 

@@ -1,6 +1,6 @@
 {
     "widgettype": "VBox",
-    "options": {"padding": "20px", "spacing": "16px", "width": "100%", "height": "100%", "css": "filler"},
+    "options": {"padding": "20px", "spacing": "12px", "width": "100%", "height": "100%", "css": "filler"},
     "subwidgets": [
         {"widgettype": "Text", "options": {"text": "🔍 知识检索", "cfontsize": 22, "fontWeight": "bold", "color": "#1a1a2e"}},
         {"widgettype": "Text", "options": {"text": "选择知识库，输入文字或上传文件检索", "cfontsize": 13, "color": "#888"}},
@@ -27,8 +27,23 @@
             ]
         },
         {
+            "widgettype": "HBox",
+            "options": {"spacing": "8px", "alignItems": "center", "wrap": true},
+            "subwidgets": [
+                {"widgettype": "Text", "options": {"text": "🏷 标签过滤:", "cfontsize": 12, "color": "#666", "padding": "2px 0"}},
+                {
+                    "widgettype": "HBox",
+                    "id": "tag_filter",
+                    "options": {"spacing": "4px", "alignItems": "center", "wrap": true, "padding": "2px 0"},
+                    "subwidgets": [
+                        {"widgettype": "Text", "options": {"text": "选择知识库后加载标签", "cfontsize": 11, "color": "#ccc"}}
+                    ]
+                }
+            ]
+        },
+        {
             "widgettype": "VBox",
-            "options": {"css": "filler", "marginTop": "16px", "width": "100%", "padding": "0", "spacing": "0"},
+            "options": {"css": "filler", "marginTop": "4px", "width": "100%", "padding": "0", "spacing": "0"},
             "subwidgets": [
                 {
                     "widgettype": "VScrollPanel",
@@ -43,17 +58,23 @@
     ],
     "binds": [
         {
+            "wid": "kb_selector",
+            "event": "change",
+            "actiontype": "script",
+            "script": "var kb_id=this.resultValue()||'all';var tf=document.querySelector('#tag_filter');if(!tf)return;if(kb_id==='all'){tf.innerHTML='<span style=font-size:11px;color:#ccc>选择具体知识库后加载标签</span>';return};fetch('/rag/knowledge_bases_list/tag_options.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)).then(function(r){return r.json()}).then(function(tags){tf.innerHTML='';if(!tags||tags.length===0){tf.innerHTML='<span style=font-size:11px;color:#ccc>该知识库暂无标签</span>';return};tags.forEach(function(t){var chip=document.createElement('span');chip.setAttribute('data-tid',t.value);chip.setAttribute('data-sel','0');chip.style.cssText='display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;margin:2px 4px;border:1px solid #ddd;background:#f5f5f5;color:#666;transition:all .2s';chip.textContent='#'+t.text;chip.onclick=function(){var el=this;var on=el.getAttribute('data-sel')==='1';el.setAttribute('data-sel',on?'0':'1');el.style.background=on?'#f5f5f5':'#e3f2fd';el.style.color=on?'#666':'#1565c0';el.style.borderColor=on?'#ddd':'#90caf9';};tf.appendChild(chip)})}).catch(function(){tf.innerHTML='<span style=font-size:11px;color:#e74c3c>加载标签失败</span>'})"
+        },
+        {
             "wid": "search_bar",
             "event": "search",
             "actiontype": "script",
-            "script": "var kw=event.params.keyword||'';var kb=bricks.getWidgetById('kb_selector',this);var kb_id=(kb&&kb.resultValue())||'all';var target=bricks.getWidgetById('search_results',this);if(target){bricks.buildUrlwidgetHandler(this,target,{},{options:{url:'/rag/knowledge_bases_list/search_result.dspy',params:{_webbricks_:1,kb_id:kb_id,keyword:kw}},mode:'replace'})()}"
+            "script": "var kw=event.params.keyword||'';var kb=bricks.getWidgetById('kb_selector',this);var kb_id=(kb&&kb.resultValue())||'all';var tag_ids='';var chips=document.querySelectorAll('#tag_filter [data-tid]');chips.forEach(function(c){if(c.getAttribute('data-sel')==='1'){tag_ids+=(tag_ids?',':'')+c.getAttribute('data-tid')}});var target=bricks.getWidgetById('search_results',this);if(target){bricks.buildUrlwidgetHandler(this,target,{},{options:{url:'/rag/knowledge_bases_list/search_result.dspy',params:{_webbricks_:1,kb_id:kb_id,keyword:kw,tag_ids:tag_ids}},mode:'replace'})()}"
         },
         {
             "wid": "search_file",
             "event": "changed",
             "actiontype": "script",
             "target": "search_file",
-            "script": "var f=this.value;if(!f)return;if(Array.isArray(f))f=f[0];if(!f)return;var kb=bricks.getWidgetById('kb_selector',this.parent);var kb_id=(kb&&kb.resultValue())||'all';var fd=new FormData();fd.append('file',f);var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&file_name='+encodeURIComponent(f.name);var pv=this.parent.parent;fetch(u,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('search_results',pv);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"
+            "script": "var f=this.value;if(!f)return;if(Array.isArray(f))f=f[0];if(!f)return;var kb=bricks.getWidgetById('kb_selector',this.parent);var kb_id=(kb&&kb.resultValue())||'all';var tag_ids='';var chips=document.querySelectorAll('#tag_filter [data-tid]');chips.forEach(function(c){if(c.getAttribute('data-sel')==='1'){tag_ids+=(tag_ids?',':'')+c.getAttribute('data-tid')}});var fd=new FormData();fd.append('file',f);var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&file_name='+encodeURIComponent(f.name)+'&tag_ids='+encodeURIComponent(tag_ids);var pv=this.parent.parent;fetch(u,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('search_results',pv);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"
         }
     ]
 }
