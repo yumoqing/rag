@@ -2,10 +2,9 @@ ns = params_kw.copy()
 db = DBPools()
 dbname = get_module_dbname('rag')
 async with db.sqlorContext(dbname) as sor:
-    import uuid
     env = request._run_ns
     userorgid = await env.get_userorgid()
-    kb_id = uuid.uuid4().hex[:12]
+    kb_id = getID(32)
     name = ns.get("name", "")
     desc = ns.get("description", "")
     await sor.sqlExe(

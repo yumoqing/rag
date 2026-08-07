@@ -2,8 +2,7 @@ ns = params_kw.copy()
 db = DBPools()
 dbname = get_module_dbname('rag')
 async with db.sqlorContext(dbname) as sor:
-    import uuid
-    dir_id = uuid.uuid4().hex[:16]
+    dir_id = getID(32)
     name = ns.get("name", "")
     parent_id = ns.get("parentid", "")
     kb_id = ns.get("kb_id", "")

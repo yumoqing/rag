@@ -322,7 +322,7 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
                 "message": "存储配额超限：机构已用 " + _fmt_bytes(used) + "，限额 " + _fmt_bytes(quota_limit) + "，本文件 " + _fmt_bytes(file_size)}, ensure_ascii=False)
 
         # Save file via FileStorage (layered dir layout, returns web path e.g. /191/193/197/97/xxx.txt)
-        doc_id = uuid.uuid4().hex[:16]
+        doc_id = uuid.uuid4().hex
         web_path = await env.save_file(file_data, file_name)
 
         file_type = _detect_file_type(file_name, "application/octet-stream")
@@ -615,7 +615,7 @@ async def dir_create_handler(request, params_kw, *args, **kwargs):
         if not kb_id or not dir_name:
             return json.dumps({"error": "kb_id and dir_name required"})
         async with get_sor_context(env, 'rag') as sor:
-            dir_id = uuid.uuid4().hex[:16]
+            dir_id = uuid.uuid4().hex
             await sor.sqlExe(
                 "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, chunk_type, content, description, created_at) "
                 "VALUES (${id}$, '', ${kb_id}$, 0, 'directory', ${name}$, ${parent}$, NOW())",
@@ -685,7 +685,7 @@ async def tag_create_handler(request, params_kw, *args, **kwargs):
             if existing:
                 return json.dumps({"status": "SUCCEEDED", "tag_id": existing[0].id, "name": name,
                                    "color": existing[0].color, "duplicate": True}, ensure_ascii=False)
-            tag_id = uuid.uuid4().hex[:16]
+            tag_id = uuid.uuid4().hex
             await sor.sqlExe(
                 "INSERT INTO tags (id, kb_id, name, color, org_id, created_at) "
                 "VALUES (${id}$, ${kb_id}$, ${name}$, ${color}$, ${org_id}$, NOW())",
@@ -742,7 +742,7 @@ async def tag_assign_handler(request, params_kw, *args, **kwargs):
         if media_type not in ("document", "face", "voice"):
             return json.dumps({"error": "media_type must be document/face/voice"})
         async with get_sor_context(env, 'rag') as sor:
-            mt_id = uuid.uuid4().hex[:16]
+            mt_id = uuid.uuid4().hex
             await sor.sqlExe(
                 "INSERT INTO media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                 "VALUES (${id}$, ${kb_id}$, ${type}$, ${mid}$, ${tid}$, NOW())",
@@ -897,7 +897,7 @@ async def tag_sync_handler(request, params_kw, *args, **kwargs):
             added = 0
             for tid in wanted_ids:
                 if tid not in current:
-                    mt_id = uuid.uuid4().hex[:16]
+                    mt_id = uuid.uuid4().hex
                     await sor.sqlExe(
                         "INSERT INTO media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                         "VALUES (${id}$, ${kb_id}$, ${type}$, ${mid}$, ${tid}$, NOW())",
