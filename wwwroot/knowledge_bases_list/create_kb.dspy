@@ -4,7 +4,7 @@ dbname = get_module_dbname('rag')
 async with db.sqlorContext(dbname) as sor:
     env = request._run_ns
     userorgid = await env.get_userorgid()
-    kb_id = getID()
+    kb_id = uuid()
     name = ns.get("name", "")
     desc = ns.get("description", "")
     await sor.sqlExe(
