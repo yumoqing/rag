@@ -14,34 +14,21 @@
                     "id": "kb_selector",
                     "options": {"name": "kb_id", "dataurl": "{{entire_url('./kb_options.dspy')}}", "text": "全部", "cwidth": 18}
                 },
+                {"widgettype": "Text", "options": {"text": "标签:", "cfontsize": 13, "color": "#666"}},
+                {
+                    "widgettype": "UiCode",
+                    "id": "tag_selector",
+                    "options": {"name": "tag_ids", "dataurl": "{{entire_url('./tag_options.dspy')}}", "text": "全部标签", "cwidth": 16, "multiple": true}
+                },
                 {
                     "widgettype": "SearchBar",
                     "id": "search_bar",
-                    "options": {"cwidth": 25, "cfontsize": 14, "placeholder": "输入检索关键词..."}
+                    "options": {"cwidth": 22, "cfontsize": 14, "placeholder": "输入检索关键词..."}
                 },
                 {
                     "widgettype": "UiFile",
                     "id": "search_file",
                     "options": {"accept": "", "multiple": false, "preview": false, "otext": "📎 文件检索", "cwidth": 10, "cheight": 3, "css": "card", "border": "1px dashed #ccc"}
-                }
-            ]
-        },
-        {
-            "widgettype": "HBox",
-            "options": {"spacing": "8px", "alignItems": "center", "wrap": true},
-            "subwidgets": [
-                {"widgettype": "Text", "options": {"text": "🏷 标签过滤:", "cfontsize": 12, "color": "#666", "padding": "2px 0"}},
-                {
-                    "widgettype": "HBox",
-                    "id": "tag_filter",
-                    "options": {"spacing": "4px", "alignItems": "center", "wrap": true, "padding": "2px 0"},
-                    "subwidgets": [
-                        {"widgettype": "Text", "options": {"text": "加载中...", "cfontsize": 11, "color": "#ccc"}}
-                    ]
-                },
-                {
-                    "widgettype": "Html",
-                    "options": {"html": "<script>(function(){setTimeout(function(){var tf=document.querySelector('#tag_filter');if(!tf)return;fetch('/rag/knowledge_bases_list/tag_options.dspy?_webbricks_=1').then(function(r){return r.json()}).then(function(tags){tf.innerHTML='';if(!tags||tags.length===0){tf.innerHTML='<span style=font-size:11px;color:#ccc>暂无标签</span>';return};tags.forEach(function(t){var chip=document.createElement('span');chip.setAttribute('data-tid',t.value);chip.setAttribute('data-sel','0');chip.style.cssText='display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;margin:2px 4px;border:1px solid #ddd;background:#f5f5f5;color:#666;transition:all .2s';chip.textContent='#'+t.text;chip.onclick=function(){var el=this;var on=el.getAttribute('data-sel')==='1';el.setAttribute('data-sel',on?'0':'1');el.style.background=on?'#f5f5f5':'#e3f2fd';el.style.color=on?'#666':'#1565c0';el.style.borderColor=on?'#ddd':'#90caf9';};tf.appendChild(chip)})}).catch(function(){tf.innerHTML='<span style=font-size:11px;color:#e74c3c>加载标签失败</span>'})},100)})()</script>"}
                 }
             ]
         },
@@ -64,15 +51,25 @@
         {
             "wid": "search_bar",
             "event": "search",
-            "actiontype": "script",
-            "script": "var kw=event.params.keyword||'';var kb=bricks.getWidgetById('kb_selector',this);var kb_id=(kb&&kb.resultValue())||'all';var tag_ids='';var chips=document.querySelectorAll('#tag_filter [data-tid]');chips.forEach(function(c){if(c.getAttribute('data-sel')==='1'){tag_ids+=(tag_ids?',':'')+c.getAttribute('data-tid')}});var target=bricks.getWidgetById('search_results',this);if(target){bricks.buildUrlwidgetHandler(this,target,{},{options:{url:'/rag/knowledge_bases_list/search_result.dspy',params:{_webbricks_:1,kb_id:kb_id,keyword:kw,tag_ids:tag_ids}},mode:'replace'})()}"
+            "actiontype": "urlwidget",
+            "target": "search_results",
+            "mode": "replace",
+            "options": {
+                "url": "/rag/knowledge_bases_list/search_result.dspy",
+                "params": {
+                    "_webbricks_": 1,
+                    "kb_id": "{{kb_selector}}",
+                    "keyword": "{{search_bar}}",
+                    "tag_ids": "{{tag_selector}}"
+                }
+            }
         },
         {
             "wid": "search_file",
             "event": "changed",
             "actiontype": "script",
             "target": "search_file",
-            "script": "var f=this.value;if(!f)return;if(Array.isArray(f))f=f[0];if(!f)return;var kb=bricks.getWidgetById('kb_selector',this.parent);var kb_id=(kb&&kb.resultValue())||'all';var tag_ids='';var chips=document.querySelectorAll('#tag_filter [data-tid]');chips.forEach(function(c){if(c.getAttribute('data-sel')==='1'){tag_ids+=(tag_ids?',':'')+c.getAttribute('data-tid')}});var fd=new FormData();fd.append('file',f);var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&file_name='+encodeURIComponent(f.name)+'&tag_ids='+encodeURIComponent(tag_ids);var pv=this.parent.parent;fetch(u,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('search_results',pv);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"
+            "script": "var f=this.value;if(!f)return;if(Array.isArray(f))f=f[0];if(!f)return;var kb=bricks.getWidgetById('kb_selector',this.parent);var kb_id=(kb&&kb.resultValue())||'all';var tg=bricks.getWidgetById('tag_selector',this.parent);var tag_ids=(tg&&tg.resultValue())||'';var fd=new FormData();fd.append('file',f);var u='/rag/knowledge_bases_list/search_result.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)+'&file_name='+encodeURIComponent(f.name)+'&tag_ids='+encodeURIComponent(tag_ids);var pv=this.parent.parent;fetch(u,{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(d){var fp=bricks.getWidgetById('search_results',pv);if(fp){fp.clear_widgets();bricks.widgetBuild(d,fp).then(function(w){if(w)fp.add_widget(w)})}})"
         }
     ]
 }
