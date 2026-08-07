@@ -132,7 +132,8 @@ submit_js = ("var rows=document.querySelectorAll('#tag_list_panel [data-sel]');"
              "fetch(u).then(function(r){return r.json()}).then(function(d){"
              "var pw=null;var w=self;while(w){if(w instanceof bricks.PopupWindow||w instanceof bricks.Popup){pw=w;break};w=w.parent};"
              "if(pw){pw.dismiss();pw.destroy()};"
-             "location.reload();"
+             "var mp=document.querySelector('#media_card_panel');"
+             "if(mp&&mp.bricks_widget){fetch('/rag/knowledge_bases_list/media_cards.dspy?_webbricks_=1&kb_id=" + kb_id + "&kind=" + kind + "').then(function(r2){return r2.json()}).then(function(d2){var mw=mp.bricks_widget;mw.clear_widgets();bricks.widgetBuild(d2,mw).then(function(nw){if(nw)mw.add_widget(nw)})}).catch(function(){})};"
              "}).catch(function(){alert('网络错误')});")
 
 # 组合弹窗内容
