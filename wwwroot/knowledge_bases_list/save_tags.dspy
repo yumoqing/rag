@@ -1,3 +1,5 @@
+import uuid
+
 ns = params_kw.copy()
 kb_id = ns.get('kb_id', '')
 doc_id = ns.get('media_id', '')
