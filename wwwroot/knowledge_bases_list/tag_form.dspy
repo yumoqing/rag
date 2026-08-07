@@ -66,8 +66,10 @@ for i, (tid, tname, tcolor) in enumerate(all_tags):
             "actiontype": "script",
             "script": (
                 "var el=this.dom_element;"
-                "var on=el.getAttribute('data-sel')==='1';el.setAttribute('data-sel',on?'0':'1');"
-                "var c=el.querySelector('[id^=tagchk_]');if(c)c.textContent=on?'\u2610':'\u2611';"
+                "var c=el.querySelector('[id^=tagchk_]');"
+                "var on=c&&c.textContent==='\u2611';"
+                "if(c)c.textContent=on?'\u2610':'\u2611';"
+                "el.setAttribute('data-sel',on?'0':'1');"
                 "el.style.backgroundColor=on?'#f8f9fa':'#e8f0fe';"
                 "var tc=c?c.nextElementSibling:null;if(tc)tc.style.color=on?'#999':'#1565c0';"
             )
@@ -115,7 +117,7 @@ add_tag_js = ("var inp=document.querySelector('#new_tag_input');"
               "var row=document.createElement('div');"
               "row.setAttribute('data-sel','1');row.id='tagrow_'+tid;"
               "row.style.cssText='display:flex;align-items:center;margin:3px 0;padding:4px 8px;border-radius:6px;width:100%;cursor:pointer;background:#e8f0fe';"
-              "row.onclick=function(){var el=this;var on=el.getAttribute('data-sel')==='1';el.setAttribute('data-sel',on?'0':'1');var c=el.querySelector('[id^=tagchk_]');if(c)c.textContent=on?'\u2610':'\u2611';el.style.backgroundColor=on?'#f8f9fa':'#e8f0fe';var tc=c?c.nextElementSibling:null;if(tc)tc.style.color=on?'#999':'#1565c0';};"
+              "row.onclick=function(){var el=this;var c=el.querySelector('[id^=tagchk_]');var on=c&&c.textContent==='\u2611';if(c)c.textContent=on?'\u2610':'\u2611';el.setAttribute('data-sel',on?'0':'1');el.style.backgroundColor=on?'#f8f9fa':'#e8f0fe';var tc=c?c.nextElementSibling:null;if(tc)tc.style.color=on?'#999':'#1565c0';};"
               "var chk=document.createElement('span');chk.id='tagchk_'+tid;chk.style.cssText='font-size:14px;width:3em;text-align:center;color:#1565c0;padding-right:6px';chk.textContent='\u2611';"
               "var lbl=document.createElement('span');lbl.style.cssText='font-size:12px;color:#1565c0;background:#e3f2fd;padding:2px 10px;border-radius:10px';lbl.textContent='#'+tname;"
               "row.appendChild(chk);row.appendChild(lbl);panel.appendChild(row);}}"
@@ -124,8 +126,8 @@ add_tag_js = ("var inp=document.querySelector('#new_tag_input');"
               "}).catch(function(){alert('网络错误')});")
 
 # 提交按钮脚本
-submit_js = ("var rows=document.querySelectorAll('#tag_list_panel [data-sel]');"
-             "var ids=[];rows.forEach(function(r){if(r.getAttribute('data-sel')==='1'){ids.push(r.id.replace('tagrow_',''))}});"
+submit_js = ("var rows=document.querySelectorAll('#tag_list_panel [id^=tagrow_]');"
+             "var ids=[];rows.forEach(function(r){var chk=r.querySelector('[id^=tagchk_]');if(chk&&chk.textContent==='\u2611'){ids.push(r.id.replace('tagrow_',''))}});"
              "if(ids.length===0){alert('请至少勾选一个标签');return};"
              "var u='/rag/knowledge_bases_list/save_tags.dspy?_webbricks_=1&kb_id=" + kb_id + "&media_id=" + doc_id + "&tag_ids='+encodeURIComponent(ids.join(','));"
              "var self=this;"
