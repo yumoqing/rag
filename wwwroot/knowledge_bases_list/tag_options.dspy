@@ -1,12 +1,9 @@
 import json
-ns = params_kw.copy()
-kb_id = ns.get('kb_id', '')
-if not kb_id or kb_id == 'all':
-    return json.dumps([], ensure_ascii=False)
 env = request._run_ns
+userorgid = await env.get_userorgid()
 async with get_sor_context(env, 'rag') as sor:
     recs = await sor.sqlExe(
-        "SELECT id, name, color FROM tags WHERE kb_id=${kb_id}$ ORDER BY created_at",
-        {"kb_id": kb_id})
+        "SELECT id, name, color FROM tags WHERE org_id=${org_id}$ ORDER BY created_at",
+        {"org_id": userorgid})
     items = [{"value": r.id, "text": r.name, "color": r.color or '#3b82f6'} for r in recs]
     return json.dumps(items, ensure_ascii=False)

@@ -52,12 +52,16 @@ if tag_ids_str:
         try:
             async with get_sor_context(env, 'rag') as sor:
                 placeholders = []
-                nsq = {"kb_id": kb_id}
+                nsq = {}
+                kb_filter = ""
+                if kb_id and kb_id != "all":
+                    kb_filter = "kb_id=${kb_id}$ AND "
+                    nsq["kb_id"] = kb_id
                 for i, tid in enumerate(wanted_tags):
                     placeholders.append("${tid_" + str(i) + "}$")
                     nsq["tid_" + str(i)] = tid
                 sql = ("SELECT media_id FROM media_tags "
-                       "WHERE kb_id=${kb_id}$ AND media_type='document' AND tag_id IN (" + ",".join(placeholders) + ") "
+                       "WHERE " + kb_filter + "media_type='document' AND tag_id IN (" + ",".join(placeholders) + ") "
                        "GROUP BY media_id HAVING COUNT(DISTINCT tag_id)=" + str(len(wanted_tags)))
                 recs = await sor.sqlExe(sql, nsq)
                 tag_doc_ids = set(r.media_id for r in recs)

@@ -36,8 +36,12 @@
                     "id": "tag_filter",
                     "options": {"spacing": "4px", "alignItems": "center", "wrap": true, "padding": "2px 0"},
                     "subwidgets": [
-                        {"widgettype": "Text", "options": {"text": "选择知识库后加载标签", "cfontsize": 11, "color": "#ccc"}}
+                        {"widgettype": "Text", "options": {"text": "加载中...", "cfontsize": 11, "color": "#ccc"}}
                     ]
+                },
+                {
+                    "widgettype": "Html",
+                    "options": {"html": "<script>(function(){setTimeout(function(){var tf=document.querySelector('#tag_filter');if(!tf)return;fetch('/rag/knowledge_bases_list/tag_options.dspy?_webbricks_=1').then(function(r){return r.json()}).then(function(tags){tf.innerHTML='';if(!tags||tags.length===0){tf.innerHTML='<span style=font-size:11px;color:#ccc>暂无标签</span>';return};tags.forEach(function(t){var chip=document.createElement('span');chip.setAttribute('data-tid',t.value);chip.setAttribute('data-sel','0');chip.style.cssText='display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;margin:2px 4px;border:1px solid #ddd;background:#f5f5f5;color:#666;transition:all .2s';chip.textContent='#'+t.text;chip.onclick=function(){var el=this;var on=el.getAttribute('data-sel')==='1';el.setAttribute('data-sel',on?'0':'1');el.style.background=on?'#f5f5f5':'#e3f2fd';el.style.color=on?'#666':'#1565c0';el.style.borderColor=on?'#ddd':'#90caf9';};tf.appendChild(chip)})}).catch(function(){tf.innerHTML='<span style=font-size:11px;color:#e74c3c>加载标签失败</span>'})},100)})()</script>"}
                 }
             ]
         },
@@ -57,12 +61,6 @@
         }
     ],
     "binds": [
-        {
-            "wid": "kb_selector",
-            "event": "change",
-            "actiontype": "script",
-            "script": "var kb_id=this.resultValue()||'all';var tf=document.querySelector('#tag_filter');if(!tf)return;if(kb_id==='all'){tf.innerHTML='<span style=font-size:11px;color:#ccc>选择具体知识库后加载标签</span>';return};fetch('/rag/knowledge_bases_list/tag_options.dspy?_webbricks_=1&kb_id='+encodeURIComponent(kb_id)).then(function(r){return r.json()}).then(function(tags){tf.innerHTML='';if(!tags||tags.length===0){tf.innerHTML='<span style=font-size:11px;color:#ccc>该知识库暂无标签</span>';return};tags.forEach(function(t){var chip=document.createElement('span');chip.setAttribute('data-tid',t.value);chip.setAttribute('data-sel','0');chip.style.cssText='display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;margin:2px 4px;border:1px solid #ddd;background:#f5f5f5;color:#666;transition:all .2s';chip.textContent='#'+t.text;chip.onclick=function(){var el=this;var on=el.getAttribute('data-sel')==='1';el.setAttribute('data-sel',on?'0':'1');el.style.background=on?'#f5f5f5':'#e3f2fd';el.style.color=on?'#666':'#1565c0';el.style.borderColor=on?'#ddd':'#90caf9';};tf.appendChild(chip)})}).catch(function(){tf.innerHTML='<span style=font-size:11px;color:#e74c3c>加载标签失败</span>'})"
-        },
         {
             "wid": "search_bar",
             "event": "search",
