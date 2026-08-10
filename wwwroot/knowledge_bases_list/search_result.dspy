@@ -153,24 +153,57 @@ if query:
     hits = hits[:top_k]
 
 else:
-    # Tag-only search: direct DB lookup for chunks of tagged documents
+    # Tag-only search: query documents table directly (handles text + non-text docs)
     if tag_doc_ids:
         try:
             async with get_sor_context(env, 'rag') as sor:
-                kb_cond = ""
+                placeholders2 = []
                 nsq2 = {}
+                kb_cond = ""
                 if kb_id and kb_id != "all":
                     kb_cond = "kb_id=${kb_id}$ AND "
                     nsq2["kb_id"] = kb_id
-                placeholders2 = []
                 for i, did in enumerate(tag_doc_ids):
                     placeholders2.append("${did_" + str(i) + "}$")
                     nsq2["did_" + str(i)] = did
-                sql2 = ("SELECT id, doc_id, content FROM document_chunks WHERE " + kb_cond +
-                        "doc_id IN (" + ",".join(placeholders2) + ") ORDER BY updated_at DESC LIMIT " + str(top_k))
-                crecs = await sor.sqlExe(sql2, nsq2)
-                for r in crecs:
-                    hits.append({"id": r.id, "doc_id": r.doc_id or "", "score": 1.0, "text": r.content or '', "kw": False})
+                # Get documents
+                sql2 = ("SELECT id, file_name, kb_id FROM documents WHERE " + kb_cond +
+                        "id IN (" + ",".join(placeholders2) + ") ORDER BY updated_at DESC LIMIT " + str(top_k * 2))
+                docs = await sor.sqlExe(sql2, nsq2)
+                doc_list = [(r.id, r.file_name or '', r.kb_id or '') for r in docs]
+                
+                if doc_list:
+                    doc_ids = [d[0] for d in doc_list]
+                    # Try to get chunks for these docs
+                    chunk_placeholders = []
+                    nsq_c = {}
+                    for i, did in enumerate(doc_ids):
+                        chunk_placeholders.append("${cdid_" + str(i) + "}$")
+                        nsq_c["cdid_" + str(i)] = did
+                    chunks_sql = ("SELECT id, doc_id, content FROM document_chunks WHERE doc_id IN (" +
+                                  ",".join(chunk_placeholders) + ") ORDER BY updated_at DESC LIMIT " + str(top_k))
+                    chunk_recs = await sor.sqlExe(chunks_sql, nsq_c)
+                    chunks_by_doc = {}
+                    for cr in chunk_recs:
+                        if cr.doc_id not in chunks_by_doc:
+                            chunks_by_doc[cr.doc_id] = []
+                        chunks_by_doc[cr.doc_id].append((cr.id, cr.content or ''))
+                    
+                    for did, fname, kbid in doc_list[:top_k]:
+                        chs = chunks_by_doc.get(did, [])
+                        if chs:
+                            for cid, ctext in chs[:2]:  # up to 2 chunks per doc
+                                hits.append({"id": cid, "doc_id": did, "score": 1.0, "text": ctext, "file_name": fname, "kw": False})
+                        else:
+                            # Non-text document: use file_name as display
+                            ext = fname.rsplit('.', 1)[-1] if '.' in fname else 'file'
+                            icon_map = {'png':'🖼', 'jpg':'🖼', 'jpeg':'🖼', 'gif':'🖼', 'webp':'🖼',
+                                        'mp4':'🎬', 'avi':'🎬', 'mov':'🎬', 'mkv':'🎬',
+                                        'mp3':'🎵', 'wav':'🎵', 'ogg':'🎵',
+                                        'pdf':'📄', 'doc':'📝', 'docx':'📝', 'txt':'📝'}
+                            icon = icon_map.get(ext.lower(), '📎')
+                            display_text = f"{icon} {fname} (非文本文档)"
+                            hits.append({"id": did, "doc_id": did, "score": 1.0, "text": display_text, "file_name": fname, "kw": False, "is_media": True})
         except Exception as e:
             info(f'[search_result] tag-only lookup error: {e}')
 
