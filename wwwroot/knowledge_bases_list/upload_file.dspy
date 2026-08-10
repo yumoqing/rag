@@ -121,9 +121,10 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
                 meta_parts['voiceprint'] = voice_speakers
             except: pass
 
-        # --- VIDEO: frame extraction ---
+        # --- VIDEO: frame extraction + voiceprint ---
         if ext_l in video_exts:
             meta_parts['video'] = 'pending'
+            video_ok = False
             try:
                 tmp_img = '/tmp/' + doc_id + '_frame.jpg'
                 subprocess.run(['ffmpeg', '-y', '-i', real_path, '-vframes', '1', '-q:v', '2', tmp_img],
@@ -166,7 +167,34 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
                         except:
                             pass
                     os.remove(tmp_img)
+                    video_ok = True
             except: pass
+
+            # --- Voiceprint: extract audio from video ---
+            if video_ok:
+                try:
+                    tmp_wav = '/tmp/' + doc_id + '_audio.wav'
+                    subprocess.run(['ffmpeg', '-y', '-i', real_path, '-vn', '-acodec', 'pcm_s16le',
+                                    '-ar', '16000', '-ac', '1', tmp_wav],
+                                   capture_output=True, timeout=60)
+                    if os.path.exists(tmp_wav) and os.path.getsize(tmp_wav) > 1000:
+                        with open(tmp_wav, 'rb') as fa:
+                            audio_data = fa.read()
+                        try:
+                            client4 = StreamHttpClient()
+                            resp4 = await client4.request('POST',
+                                'https://media.opencomputing.net:10443/voiceprint/extract/submit',
+                                files={'file': (file_name.rsplit('.', 1)[0] + '.wav', audio_data)})
+                            vd = json.loads(resp4)
+                            voice_speakers = vd.get('speakers', 1) if vd.get('status') == 'SUCCEEDED' else (1 if vd.get('embedding') else 0)
+                            meta_parts['voiceprint'] = voice_speakers
+                        except: pass
+                    if os.path.exists(tmp_wav):
+                        os.remove(tmp_wav)
+                except: pass
+
+            if video_ok:
+                meta_parts['video'] = 'done'
 
         # --- RAG INGEST for text ---
         if text and len(text.strip()) > 10:
