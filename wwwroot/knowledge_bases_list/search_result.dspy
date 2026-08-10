@@ -34,16 +34,7 @@ if not file_data:
 import base64, io
 top_k = int(ns.get('top_k', 5))
 
-if not query:
-    return json.dumps({
-        "widgettype": "VBox", "options": {"padding": "20px", "spacing": "16px"},
-        "subwidgets": [
-            {"widgettype": "Text", "options": {"text": "🔍 知识检索", "cfontsize": 20, "fontWeight": "bold"}},
-            {"widgettype": "Text", "options": {"text": "请输入检索内容", "color": "#666", "marginTop": "20px"}}
-        ]
-    }, ensure_ascii=False)
-
-# 0. Parse tag filter — find doc_ids that match ALL selected tags
+# 0. Parse tag filter FIRST — find doc_ids that match ALL selected tags
 tag_doc_ids = None
 tag_info = ""
 if tag_ids_str:
@@ -65,93 +56,128 @@ if tag_ids_str:
                        "GROUP BY media_id HAVING COUNT(DISTINCT tag_id)=" + str(len(wanted_tags)))
                 recs = await sor.sqlExe(sql, nsq)
                 tag_doc_ids = set(r.media_id for r in recs)
-                tag_info = " (标签过滤: " + ",".join(wanted_tags[:3]) + ("..." if len(wanted_tags)>3 else "") + ")"
+                tag_info = " (标签: " + ",".join(wanted_tags[:3]) + ("..." if len(wanted_tags)>3 else "") + ")"
                 info(f'[search_result] tag filter: {len(tag_doc_ids)} docs match {len(wanted_tags)} tags')
         except Exception as e:
             info(f'[search_result] tag filter error: {e}')
 
-# 1. Embed
-vec = []
-try:
-    client = StreamHttpClient()
-    resp = await client.request('POST', 'https://embedding.opencomputing.net:10443/api/embed',
-        json={"texts": [query], "model": "CLIP-ViT-H-14"})
-    emb = json.loads(resp)
-    vec = emb.get("text_embeddings", emb.get("embeddings", [[]]))[0]
-except:
-    pass
-if not vec:
-    return json.dumps({"widgettype": "Text", "options": {"text": "向量化失败", "cfontsize": 14, "color": "#e74c3c"}}, ensure_ascii=False)
-
-# 2. VDB search
-raw_rows = []
-try:
-    recall_n = top_k * 3
-    client2 = StreamHttpClient()
-    resp2 = await client2.request('POST', 'https://vectordb.opencomputing.net:10443/v1/query',
-        json={"colname": kb_id, "vector": vec, "pagerows": recall_n, "output_fields": ["*"]})
-    vdb = json.loads(resp2)
-    raw_rows = vdb.get("data", {}).get("rows", [])
-    if not isinstance(raw_rows, list):
-        raw_rows = []
-except:
-    pass
-
-# 3. Keyword recall (hybrid search: vector alone misses technical terms)
-kw_ids = set()
-kw_rows = []
-try:
-    tokens = [t for t in query.split() if t][:5] or [query]
-    conds = []
-    nsq = {"kb_id": kb_id}
-    for i, t in enumerate(tokens):
-        conds.append("content LIKE ${kw_" + str(i) + "}$")
-        nsq["kw_" + str(i)] = "%" + t + "%"
-    ksql = "SELECT id, doc_id, content FROM document_chunks WHERE kb_id=${kb_id}$ AND (" + " OR ".join(conds) + ") LIMIT 20"
-    async with get_sor_context(env, 'rag') as sor:
-        krecs = await sor.sqlExe(ksql, nsq)
-    for r in krecs:
-        kw_ids.add(r.id)
-        kw_rows.append({"id": r.id, "doc_id": r.doc_id or "", "score": 0.99, "text": r.content or '', "kw": True})
-except Exception as e:
-    info('[search_result] keyword recall failed: %s' % e)
+# Early return only when nothing is provided
+if not query and not tag_ids_str and not file_data:
+    return json.dumps({
+        "widgettype": "VBox", "options": {"padding": "20px", "spacing": "16px"},
+        "subwidgets": [
+            {"widgettype": "Text", "options": {"text": "🔍 知识检索", "cfontsize": 20, "fontWeight": "bold"}},
+            {"widgettype": "Text", "options": {"text": "请输入检索内容或选择标签", "color": "#666", "marginTop": "20px"}}
+        ]
+    }, ensure_ascii=False)
 
 hits = []
-seen = set()
-for row in raw_rows:
-    rid = str(row.get("id", ""))
-    score = row.get("score", 0)
-    # Resolve doc_id from chunk id pattern "xxxx_c0"
-    doc_id = rid.rsplit('_c', 1)[0] if '_c' in rid else rid
-    # Look up chunk text from DB
-    chunk_text = ''
-    async with get_sor_context(env, 'rag') as sor:
-        recs = await sor.sqlExe(
-            "SELECT content, doc_id FROM document_chunks WHERE id=${id}$",
-            {"id": rid})
-        if recs:
-            chunk_text = recs[0].content or ''
-            doc_id = recs[0].doc_id or doc_id
-    # Tag filter
-    if tag_doc_ids is not None and doc_id not in tag_doc_ids:
-        continue
-    if chunk_text:
-        is_kw = rid in kw_ids
-        hits.append({"id": rid, "doc_id": doc_id, "score": 0.99 if is_kw else score, "text": chunk_text, "kw": is_kw})
-        seen.add(rid)
-for kr in kw_rows:
-    if kr["id"] not in seen:
-        if tag_doc_ids is not None and kr["doc_id"] not in tag_doc_ids:
+raw_rows = []
+kw_rows = []
+
+if query:
+    # 1. Embed
+    vec = []
+    try:
+        client = StreamHttpClient()
+        resp = await client.request('POST', 'https://embedding.opencomputing.net:10443/api/embed',
+            json={"texts": [query], "model": "CLIP-ViT-H-14"})
+        emb = json.loads(resp)
+        vec = emb.get("text_embeddings", emb.get("embeddings", [[]]))[0]
+    except:
+        pass
+    if not vec:
+        return json.dumps({"widgettype": "Text", "options": {"text": "向量化失败", "cfontsize": 14, "color": "#e74c3c"}}, ensure_ascii=False)
+
+    # 2. VDB search
+    try:
+        recall_n = top_k * 3
+        client2 = StreamHttpClient()
+        resp2 = await client2.request('POST', 'https://vectordb.opencomputing.net:10443/v1/query',
+            json={"colname": kb_id, "vector": vec, "pagerows": recall_n, "output_fields": ["*"]})
+        vdb = json.loads(resp2)
+        raw_rows = vdb.get("data", {}).get("rows", [])
+        if not isinstance(raw_rows, list):
+            raw_rows = []
+    except:
+        pass
+
+    # 3. Keyword recall (hybrid search: vector alone misses technical terms)
+    kw_ids = set()
+    try:
+        tokens = [t for t in query.split() if t][:5] or [query]
+        conds = []
+        nsq = {"kb_id": kb_id}
+        for i, t in enumerate(tokens):
+            conds.append("content LIKE ${kw_" + str(i) + "}$")
+            nsq["kw_" + str(i)] = "%" + t + "%"
+        ksql = "SELECT id, doc_id, content FROM document_chunks WHERE kb_id=${kb_id}$ AND (" + " OR ".join(conds) + ") LIMIT 20"
+        async with get_sor_context(env, 'rag') as sor:
+            krecs = await sor.sqlExe(ksql, nsq)
+        for r in krecs:
+            kw_ids.add(r.id)
+            kw_rows.append({"id": r.id, "doc_id": r.doc_id or "", "score": 0.99, "text": r.content or '', "kw": True})
+    except Exception as e:
+        info('[search_result] keyword recall failed: %s' % e)
+
+    seen = set()
+    for row in raw_rows:
+        rid = str(row.get("id", ""))
+        score = row.get("score", 0)
+        # Resolve doc_id from chunk id pattern "xxxx_c0"
+        doc_id = rid.rsplit('_c', 1)[0] if '_c' in rid else rid
+        # Look up chunk text from DB
+        chunk_text = ''
+        async with get_sor_context(env, 'rag') as sor:
+            recs = await sor.sqlExe(
+                "SELECT content, doc_id FROM document_chunks WHERE id=${id}$",
+                {"id": rid})
+            if recs:
+                chunk_text = recs[0].content or ''
+                doc_id = recs[0].doc_id or doc_id
+        # Tag filter
+        if tag_doc_ids is not None and doc_id not in tag_doc_ids:
             continue
-        hits.append(kr)
-        seen.add(kr["id"])
+        if chunk_text:
+            is_kw = rid in kw_ids
+            hits.append({"id": rid, "doc_id": doc_id, "score": 0.99 if is_kw else score, "text": chunk_text, "kw": is_kw})
+            seen.add(rid)
+    for kr in kw_rows:
+        if kr["id"] not in seen:
+            if tag_doc_ids is not None and kr["doc_id"] not in tag_doc_ids:
+                continue
+            hits.append(kr)
+            seen.add(kr["id"])
 
-hits.sort(key=lambda x: x.get("score", 0), reverse=True)
-hits = hits[:top_k]
+    hits.sort(key=lambda x: x.get("score", 0), reverse=True)
+    hits = hits[:top_k]
 
+else:
+    # Tag-only search: direct DB lookup for chunks of tagged documents
+    if tag_doc_ids:
+        try:
+            async with get_sor_context(env, 'rag') as sor:
+                kb_cond = ""
+                nsq2 = {}
+                if kb_id and kb_id != "all":
+                    kb_cond = "kb_id=${kb_id}$ AND "
+                    nsq2["kb_id"] = kb_id
+                placeholders2 = []
+                for i, did in enumerate(tag_doc_ids):
+                    placeholders2.append("${did_" + str(i) + "}$")
+                    nsq2["did_" + str(i)] = did
+                sql2 = ("SELECT id, doc_id, content FROM document_chunks WHERE " + kb_cond +
+                        "doc_id IN (" + ",".join(placeholders2) + ") ORDER BY updated_at DESC LIMIT " + str(top_k))
+                crecs = await sor.sqlExe(sql2, nsq2)
+                for r in crecs:
+                    hits.append({"id": r.id, "doc_id": r.doc_id or "", "score": 1.0, "text": r.content or '', "kw": False})
+        except Exception as e:
+            info(f'[search_result] tag-only lookup error: {e}')
+
+header_text = f"🔍 检索: {query}" if query else "🔍 标签检索"
 subwidgets = [
-    {"widgettype": "Text", "options": {"text": f"🔍 检索: {query}{tag_info}", "cfontsize": 18, "fontWeight": "bold", "marginBottom": "8px"}},
-    {"widgettype": "Text", "options": {"text": f"共 {len(hits)} 条结果 (召回 {len(raw_rows)} 条)", "cfontsize": 13, "color": "#888", "marginBottom": "16px"}}
+    {"widgettype": "Text", "options": {"text": header_text + tag_info, "cfontsize": 18, "fontWeight": "bold", "marginBottom": "8px"}},
+    {"widgettype": "Text", "options": {"text": f"共 {len(hits)} 条结果" + (f" (召回 {len(raw_rows)} 条)" if raw_rows else ""), "cfontsize": 13, "color": "#888", "marginBottom": "16px"}}
 ]
 
 if not hits:

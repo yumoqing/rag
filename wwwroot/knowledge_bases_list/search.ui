@@ -3,7 +3,7 @@
     "options": {"padding": "20px", "spacing": "12px", "width": "100%", "height": "100%", "css": "filler"},
     "subwidgets": [
         {"widgettype": "Text", "options": {"text": "🔍 知识检索", "cfontsize": 22, "fontWeight": "bold", "color": "#1a1a2e"}},
-        {"widgettype": "Text", "options": {"text": "选择知识库，输入文字或上传文件检索", "cfontsize": 13, "color": "#888"}},
+        {"widgettype": "Text", "options": {"text": "选择知识库，输入文字、选择标签或上传文件检索", "cfontsize": 13, "color": "#888"}},
         {
             "widgettype": "HBox",
             "options": {"spacing": "12px", "alignItems": "center"},
@@ -51,6 +51,22 @@
         {
             "wid": "search_bar",
             "event": "search",
+            "actiontype": "urlwidget",
+            "target": "search_results",
+            "mode": "replace",
+            "options": {
+                "url": "/rag/knowledge_bases_list/search_result.dspy",
+                "params": {
+                    "_webbricks_": 1,
+                    "kb_id": "{{kb_selector}}",
+                    "keyword": "{{search_bar}}",
+                    "tag_ids": "{{tag_selector}}"
+                }
+            }
+        },
+        {
+            "wid": "tag_selector",
+            "event": "changed",
             "actiontype": "urlwidget",
             "target": "search_results",
             "mode": "replace",
