@@ -168,7 +168,7 @@ else:
                     nsq2["did_" + str(i)] = did
                 # Get documents (exclude face/voice generated derivatives)
                 sql2 = ("SELECT id, file_name, kb_id FROM documents WHERE " + kb_cond +
-                        "id IN (" + ",".join(placeholders2) + ") AND (metadata IS NULL OR metadata NOT LIKE '%\"face\"%') ORDER BY created_at DESC LIMIT " + str(top_k * 2))
+                        "id IN (" + ",".join(placeholders2) + ") AND (metadata IS NULL OR metadata NOT LIKE '%%\"face\"%%') ORDER BY created_at DESC LIMIT " + str(top_k * 2))
                 docs = await sor.sqlExe(sql2, nsq2)
                 doc_list = [(r.id, r.file_name or '', r.kb_id or '') for r in docs]
                 
