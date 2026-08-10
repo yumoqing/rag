@@ -181,7 +181,7 @@ else:
                         chunk_placeholders.append("${cdid_" + str(i) + "}$")
                         nsq_c["cdid_" + str(i)] = did
                     chunks_sql = ("SELECT id, doc_id, content FROM document_chunks WHERE doc_id IN (" +
-                                  ",".join(chunk_placeholders) + ") ORDER BY updated_at DESC LIMIT " + str(top_k))
+                                  ",".join(chunk_placeholders) + ") ORDER BY created_at DESC LIMIT " + str(top_k))
                     chunk_recs = await sor.sqlExe(chunks_sql, nsq_c)
                     chunks_by_doc = {}
                     for cr in chunk_recs:
