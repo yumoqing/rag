@@ -167,10 +167,10 @@ else:
                     placeholders2.append("${did_" + str(i) + "}$")
                     nsq2["did_" + str(i)] = did
                 # Get documents (exclude face/voice generated derivatives)
-                sql2 = ("SELECT id, file_name, kb_id FROM documents WHERE " + kb_cond +
+                sql2 = ("SELECT id, file_name, kb_id, file_path FROM documents WHERE " + kb_cond +
                         "id IN (" + ",".join(placeholders2) + ") AND (metadata IS NULL OR metadata NOT LIKE '%%\"face\"%%') ORDER BY created_at DESC LIMIT " + str(top_k * 2))
                 docs = await sor.sqlExe(sql2, nsq2)
-                doc_list = [(r.id, r.file_name or '', r.kb_id or '') for r in docs]
+                doc_list = [(r.id, r.file_name or '', r.kb_id or '', r.file_path or '') for r in docs]
                 
                 if doc_list:
                     doc_ids = [d[0] for d in doc_list]
@@ -189,21 +189,15 @@ else:
                             chunks_by_doc[cr.doc_id] = []
                         chunks_by_doc[cr.doc_id].append((cr.id, cr.content or ''))
                     
-                    for did, fname, kbid in doc_list[:top_k]:
+                    for did, fname, kbid, fpath in doc_list[:top_k]:
                         chs = chunks_by_doc.get(did, [])
                         if chs:
                             for cid, ctext in chs[:2]:  # up to 2 chunks per doc
-                                hits.append({"id": cid, "doc_id": did, "score": 1.0, "text": ctext, "file_name": fname, "kw": False})
+                                hits.append({"id": cid, "doc_id": did, "score": 1.0, "text": ctext, "file_name": fname, "file_path": fpath, "kw": False})
                         else:
-                            # Non-text document: use file_name as display
-                            ext = fname.rsplit('.', 1)[-1] if '.' in fname else 'file'
-                            icon_map = {'png':'🖼', 'jpg':'🖼', 'jpeg':'🖼', 'gif':'🖼', 'webp':'🖼',
-                                        'mp4':'🎬', 'avi':'🎬', 'mov':'🎬', 'mkv':'🎬',
-                                        'mp3':'🎵', 'wav':'🎵', 'ogg':'🎵',
-                                        'pdf':'📄', 'doc':'📝', 'docx':'📝', 'txt':'📝'}
-                            icon = icon_map.get(ext.lower(), '📎')
-                            display_text = f"{icon} {fname} (非文本文档)"
-                            hits.append({"id": did, "doc_id": did, "score": 1.0, "text": display_text, "file_name": fname, "kw": False, "is_media": True})
+                            # Non-text document: render as media widget
+                            ext = fname.rsplit('.', 1)[-1].lower() if '.' in fname else ''
+                            hits.append({"id": did, "doc_id": did, "score": 1.0, "text": "", "file_name": fname, "file_path": fpath, "file_ext": ext, "kw": False, "is_media": True})
         except Exception as e:
             info(f'[search_result] tag-only lookup error: {e}')
 
@@ -216,23 +210,54 @@ subwidgets = [
 if not hits:
     subwidgets.append({"widgettype": "Text", "options": {"text": "😔 未找到相关内容", "cfontsize": 14, "color": "#aaa", "halign": "center", "marginTop": "40px"}})
 else:
+    def safe_url(p):
+        if not p:
+            return ''
+        if p.startswith('/idfile'):
+            return p
+        return '/idfile' + p
+    
+    video_exts = {'mp4', 'avi', 'mov', 'mkv', 'webm'}
+    audio_exts = {'mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac'}
+    image_exts = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'}
+    
     for i, h in enumerate(hits):
+        is_media = h.get("is_media", False)
         score_pct = round(float(h["score"]) * 100, 1)
         color = "#3b82f6" if score_pct > 60 else ("#10b981" if score_pct > 30 else "#f59e0b")
         badges = [{"widgettype": "Text", "options": {"text": f"{score_pct}%", "cfontsize": 11, "bgcolor": color, "color": "#fff", "padding": "2px 8px", "borderRadius": "10px"}}]
         if h.get("kw"):
             badges.append({"widgettype": "Text", "options": {"text": "📌 关键词命中", "cfontsize": 11, "bgcolor": "#f59e0b", "color": "#fff", "padding": "2px 8px", "borderRadius": "10px", "marginLeft": "6px"}})
+        
+        card_subwidgets = [
+            {"widgettype": "HBox", "options": {"alignItems": "center", "marginBottom": "6px"}, "subwidgets": [
+                {"widgettype": "Text", "options": {"text": f"#{i+1}", "cfontsize": 12, "fontWeight": "bold", "color": color, "marginRight": "8px"}},
+                *badges,
+                {"widgettype": "Text", "options": {"text": f"  {h['file_name'] or h['id'][:16]}", "cfontsize": 11, "color": "#999", "marginLeft": "8px"}}
+            ]}
+        ]
+        
+        if is_media and h.get("file_ext"):
+            media_url = safe_url(h.get("file_path", ""))
+            ext = h["file_ext"]
+            if ext in video_exts:
+                if media_url:
+                    card_subwidgets.append({"widgettype": "VideoPlayer", "options": {"url": media_url, "width": "100%", "cheight": 18}})
+            elif ext in audio_exts:
+                if media_url:
+                    card_subwidgets.append({"widgettype": "Html", "options": {"html": "<audio controls preload=\"metadata\" style=\"width:100%\" src=\"" + media_url + "\"></audio>", "padding": "4px 0"}})
+            elif ext in image_exts:
+                if media_url:
+                    card_subwidgets.append({"widgettype": "Image", "options": {"url": media_url, "width": "100%", "cheight": 14, "objectFit": "contain", "bgcolor": "#f0f0f0"}})
+            else:
+                card_subwidgets.append({"widgettype": "Text", "options": {"text": f"📎 {h['file_name']}", "cfontsize": 13, "color": "#888"}})
+        else:
+            card_subwidgets.append({"widgettype": "Text", "options": {"text": h["text"][:300], "cfontsize": 13, "color": "#333", "lineHeight": "1.6"}})
+        
         subwidgets.append({
             "widgettype": "VBox",
             "options": {"padding": "12px 16px", "marginBottom": "8px", "border": "1px solid #e0e0e0", "borderLeft": f"3px solid {color}", "bgcolor": "#fafafa", "borderRadius": "4px"},
-            "subwidgets": [
-                {"widgettype": "HBox", "options": {"alignItems": "center", "marginBottom": "6px"}, "subwidgets": [
-                    {"widgettype": "Text", "options": {"text": f"#{i+1}", "cfontsize": 12, "fontWeight": "bold", "color": color, "marginRight": "8px"}},
-                    *badges,
-                    {"widgettype": "Text", "options": {"text": f"  {h['id'][:16]}", "cfontsize": 11, "color": "#999", "marginLeft": "8px"}}
-                ]},
-                {"widgettype": "Text", "options": {"text": h["text"][:300], "cfontsize": 13, "color": "#333", "lineHeight": "1.6"}}
-            ]
+            "subwidgets": card_subwidgets
         })
 
 return json.dumps({"widgettype": "VBox", "options": {"padding": "20px", "spacing": "4px"}, "subwidgets": subwidgets}, ensure_ascii=False, default=str)
