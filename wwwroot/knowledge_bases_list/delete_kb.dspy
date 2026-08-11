@@ -45,7 +45,7 @@ async with get_sor_context(env, 'rag') as sor:
         try:
             client2 = StreamHttpClient()
             await client2.request('POST',
-                'https://graph.opencomputing.net:10443/api/graph/delete',
+                'http://localhost:9092/api/graph/delete',
                 json={"graph": kb_id})
             deleted["graph"] = 1
         except Exception as e:
