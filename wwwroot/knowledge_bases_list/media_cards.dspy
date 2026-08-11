@@ -13,7 +13,7 @@ try:
         if kind == 'voice':
             recs = await sor.sqlExe(
                 "SELECT id, file_name, file_path, metadata, created_at FROM documents "
-                "WHERE kb_id=${kb_id}$ AND (metadata LIKE '%%voiceprint_status%%"done"%%' OR LOWER(file_name) LIKE '%%.mp3' OR LOWER(file_name) LIKE '%%.wav' "
+                "WHERE kb_id=${kb_id}$ AND (metadata LIKE '%%voiceprint_status%%done%%' OR LOWER(file_name) LIKE '%%.mp3' OR LOWER(file_name) LIKE '%%.wav' "
                 "OR LOWER(file_name) LIKE '%%.m4a' OR LOWER(file_name) LIKE '%%.aac' OR LOWER(file_name) LIKE '%%.ogg' "
                 "OR LOWER(file_name) LIKE '%%.flac') ORDER BY created_at DESC",
                 {"kb_id": kb_id})
@@ -36,6 +36,18 @@ try:
         # 查出入介质标签（从标签表中取出来），按 doc_id 编组
         doc_ids = [r["id"] for r in rows]
         doc_tags = {}
+        if doc_ids:
+            try:
+                id_list = ','.join(["'" + str(x) + "'" for x in doc_ids])
+                mt_recs = await sor.sqlExe(
+                    "SELECT mt.media_id, t.name, t.color FROM media_tags mt " +
+                    "JOIN tags t ON mt.tag_id=t.id " +
+                    "WHERE mt.media_type='document' AND mt.media_id IN (" + id_list + ")",
+                    ns={})
+                for mt in mt_recs:
+                    doc_tags.setdefault(mt.media_id, []).append({"name": mt.name, "color": mt.color or '#3b82f6'})
+            except:
+                pass
         if doc_ids:
             mt_recs = await sor.sqlExe(
                 "SELECT mt.media_id, t.name, t.color FROM media_tags mt "
