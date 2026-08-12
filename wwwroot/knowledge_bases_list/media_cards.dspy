@@ -36,6 +36,36 @@ try:
         # 查出入介质标签（从标签表中取出来），按 doc_id 编组
         doc_ids = [r["id"] for r in rows]
         doc_tags = {}
+        if doc_ids:
+            # Source 1: media_tags table (from face processing etc)
+            try:
+                id_list = ','.join(["'" + str(x) + "'" for x in doc_ids])
+                mt_recs = await sor.sqlExe(
+                    "SELECT mt.media_id, t.name, t.color FROM media_tags mt " +
+                    "JOIN tags t ON mt.tag_id=t.id " +
+                    "WHERE mt.media_type='document' AND mt.media_id IN (" + id_list + ")",
+                    ns={})
+                for mt in mt_recs:
+                    doc_tags.setdefault(mt.media_id, []).append({"name": mt.name, "color": mt.color or '#3b82f6'})
+            except:
+                pass
+            # Source 2: metadata.tags (from add_tag.dspy UI)
+            for r in rows:
+                try:
+                    meta = json.loads(r.get("metadata", "{}"))
+                    tags_list = meta.get("tags", [])
+                    if isinstance(tags_list, list):
+                        for t in tags_list:
+                            if isinstance(t, str):
+                                tag_entry = {"name": t, "color": "#3b82f6"}
+                            else:
+                                tag_entry = t
+                            existing = doc_tags.get(r["id"], [])
+                            if not any(e.get("name") == tag_entry.get("name") for e in existing):
+                                existing.append(tag_entry)
+                                doc_tags[r["id"]] = existing
+                except:
+                    pass
         for r in rows:
             r["media_tags"] = doc_tags.get(r["id"], [])
 except Exception:
