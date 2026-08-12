@@ -250,7 +250,7 @@ else:
             ext = h["file_ext"]
             if ext in video_exts:
                 if media_url:
-                    card_subwidgets.append({"widgettype": "VideoPlayer", "options": {"url": media_url, "width": "100%", "autoplay": True}})
+                    card_subwidgets.append({"widgettype": "Html", "options": {"html": "<video controls autoplay muted playsinline style=\"width:100%;max-height:400px\" src=\"" + media_url + "\"></video>", "padding": "4px 0"}})
             elif ext in audio_exts:
                 if media_url:
                     card_subwidgets.append({"widgettype": "Html", "options": {"html": "<audio controls preload=\"metadata\" style=\"width:100%\" src=\"" + media_url + "\"></audio>", "padding": "4px 0"}})
