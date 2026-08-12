@@ -130,17 +130,25 @@ if query:
         chunk_text = ''
         async with get_sor_context(env, 'rag') as sor:
             recs = await sor.sqlExe(
-                "SELECT content, doc_id FROM document_chunks WHERE id=${id}$",
+                "SELECT content, doc_id, metadata FROM document_chunks WHERE id=${id}$",
                 {"id": rid})
+            chunk_meta = {}
             if recs:
                 chunk_text = recs[0].content or ''
                 doc_id = recs[0].doc_id or doc_id
+                try:
+                    chunk_meta = json.loads(recs[0].metadata) if recs[0].metadata else {}
+                except:
+                    pass
         # Tag filter
         if tag_doc_ids is not None and doc_id not in tag_doc_ids:
             continue
         if chunk_text:
             is_kw = rid in kw_ids
-            hits.append({"id": rid, "doc_id": doc_id, "score": 0.99 if is_kw else score, "text": chunk_text, "kw": is_kw})
+            hit = {"id": rid, "doc_id": doc_id, "score": 0.99 if is_kw else score, "text": chunk_text, "kw": is_kw}
+            if chunk_meta:
+                hit.update({k: chunk_meta[k] for k in ('bbox', 'start_time', 'end_time') if k in chunk_meta})
+            hits.append(hit)
             seen.add(rid)
     for kr in kw_rows:
         if kr["id"] not in seen:
@@ -238,7 +246,7 @@ else:
         ]
         
         if is_media and h.get("file_ext"):
-            media_url = safe_url(h.get("file_path", ""))
+            media_url = entire_url(safe_url(h.get("file_path", "")))
             ext = h["file_ext"]
             if ext in video_exts:
                 if media_url:
@@ -251,6 +259,22 @@ else:
                     card_subwidgets.append({"widgettype": "Image", "options": {"url": media_url, "width": "100%", "cheight": 14, "objectFit": "contain", "bgcolor": "#f0f0f0"}})
             else:
                 card_subwidgets.append({"widgettype": "Text", "options": {"text": f"📎 {h['file_name']}", "cfontsize": 13, "color": "#888"}})
+            # Position info (bbox for images, timestamps for video/audio)
+            meta_info = []
+            bbox = h.get("bbox")
+            if bbox and isinstance(bbox, dict):
+                meta_info.append(f"📍 ({bbox.get('x1',0):.0f},{bbox.get('y1',0):.0f})-({bbox.get('x2',0):.0f},{bbox.get('y2',0):.0f})")
+            start_t = h.get("start_time")
+            end_t = h.get("end_time")
+            if start_t is not None or end_t is not None:
+                st = f"{start_t:.1f}s" if start_t is not None else "0s"
+                et = f"{end_t:.1f}s" if end_t is not None else ""
+                if et:
+                    meta_info.append(f"⏱ {st} → {et}")
+                else:
+                    meta_info.append(f"⏱ {st}")
+            if meta_info:
+                card_subwidgets.append({"widgettype": "Text", "options": {"text": " · ".join(meta_info), "cfontsize": 10, "color": "#888", "marginTop": "2px"}})
         else:
             card_subwidgets.append({"widgettype": "Text", "options": {"text": h["text"][:300], "cfontsize": 13, "color": "#333", "lineHeight": "1.6"}})
         
