@@ -527,7 +527,7 @@ async def _rag_ingest_async(env, text, kb_id, doc_id):
     async with get_sor_context(env, 'rag') as sor:
         for i, (chunk_text, vid) in enumerate(zip(chunks, vector_ids)):
             await sor.sqlExe(
-                "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
+                "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, metadata, created_at) "
                 "VALUES (${id}$, ${doc_id}$, ${kb_id}$, ${idx}$, ${content}$, ${vid}$, NOW())",
                 {"id": f"{doc_id}_c{i}", "doc_id": doc_id, "kb_id": kb_id,
                  "idx": i, "content": chunk_text[:2000], "vid": vid})
