@@ -225,6 +225,29 @@ else:
             info(f'[search_result] tag-only lookup error: {e}')
 
 header_text = f"🔍 检索: {query}" if query else "🔍 标签检索"
+
+# 补全 hits 的 file_name/file_path（向量/关键词召回路径只有 chunk 信息，缺文件名）
+try:
+    need = sorted({h.get("doc_id", "") for h in hits if h.get("doc_id") and not h.get("file_name")})
+    if need:
+        ph = []
+        nsq_d = {}
+        for i, did in enumerate(need):
+            ph.append("${ddid_" + str(i) + "}$")
+            nsq_d["ddid_" + str(i)] = did
+        async with get_sor_context(env, 'rag') as sor:
+            drecs = await sor.sqlExe(
+                "SELECT id, file_name, file_path FROM rag_documents WHERE id IN (" + ",".join(ph) + ")", nsq_d)
+        dmap = {r.id: (r.file_name or '', r.file_path or '') for r in drecs}
+        for h in hits:
+            if not h.get("file_name") and h.get("doc_id") in dmap:
+                fn, fp = dmap[h["doc_id"]]
+                h["file_name"] = fn
+                if not h.get("file_path"):
+                    h["file_path"] = fp
+except Exception as e:
+    info('[search_result] enrich file_name failed: %s' % e)
+
 subwidgets = [
     {"widgettype": "Text", "options": {"text": header_text + tag_info, "cfontsize": 18, "fontWeight": "bold", "marginBottom": "8px"}},
     {"widgettype": "Text", "options": {"text": f"共 {len(hits)} 条结果" + (f" (召回 {len(raw_rows)} 条)" if raw_rows else ""), "cfontsize": 13, "color": "#888", "marginBottom": "16px"}}
@@ -256,7 +279,7 @@ else:
             {"widgettype": "HBox", "options": {"alignItems": "center", "marginBottom": "6px"}, "subwidgets": [
                 {"widgettype": "Text", "options": {"text": f"#{i+1}", "cfontsize": 12, "fontWeight": "bold", "color": color, "marginRight": "8px"}},
                 *badges,
-                {"widgettype": "Text", "options": {"text": f"  {h['file_name'] or h['id'][:16]}", "cfontsize": 11, "color": "#999", "marginLeft": "8px"}}
+                {"widgettype": "Text", "options": {"text": f"  {h.get('file_name') or (h.get('id') or '')[:16]}", "cfontsize": 11, "color": "#999", "marginLeft": "8px"}}
             ]}
         ]
         
@@ -273,7 +296,7 @@ else:
                 if media_url:
                     card_subwidgets.append({"widgettype": "Image", "options": {"url": media_url, "width": "100%", "cheight": 14, "objectFit": "contain", "bgcolor": "#f0f0f0"}})
             else:
-                card_subwidgets.append({"widgettype": "Text", "options": {"text": f"📎 {h['file_name']}", "cfontsize": 13, "color": "#888"}})
+                card_subwidgets.append({"widgettype": "Text", "options": {"text": f"📎 {h.get('file_name') or ''}", "cfontsize": 13, "color": "#888"}})
             # Position info (bbox for images, timestamps for video/audio)
             meta_info = []
             bbox = h.get("bbox")
