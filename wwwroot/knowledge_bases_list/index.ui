@@ -63,7 +63,11 @@
                                     "actiontype": "urlwidget",
                                     "target": "Popup",
                                     "popup_options": {
-                                        "auto_dismiss": true
+                                        "auto_dismiss": false,
+                                        "dismiss_events": ["cancel", "submited"],
+                                        "movable": true,
+                                        "width": "34%",
+                                        "height": "auto"
                                     },
                                     "options": {
                                         "url": "{{entire_url('./new_kb_form.ui')}}"

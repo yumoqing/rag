@@ -1,24 +1,19 @@
 {
-    "widgettype": "VBox",
-    "options": {"padding": "16px", "spacing": "12px"},
-    "subwidgets": [
-        {"widgettype": "Text", "options": {"text": "新建知识库", "cfontsize": 18, "fontWeight": "bold"}},
-        {
-            "widgettype": "Form",
-            "id": "kb_form",
-            "options": {
-                "cols": 1,
-                "fields": [
-                    {"name": "name", "label": "名称", "uitype": "str", "required": true},
-                    {"name": "description", "label": "描述", "uitype": "text"},
-                    {"name": "embedding_type", "label": "向量引擎", "uitype": "code", "value": "clip-vith14", "dataurl": "{{entire_url('./embedding_options.dspy')}}"}
-                ]
-            }
-        }
-    ],
+    "widgettype": "Form",
+    "id": "kb_form",
+    "options": {
+        "cols": 1,
+        "title": "新建知识库",
+        "padding": "16px",
+        "fields": [
+            {"name": "name", "label": "名称", "uitype": "str", "required": true},
+            {"name": "description", "label": "描述", "uitype": "text"},
+            {"name": "embedding_type", "label": "向量引擎", "uitype": "code", "value": "clip-vith14", "dataurl": "{{entire_url('./embedding_options.dspy')}}"}
+        ]
+    },
     "binds": [
         {
-            "wid": "kb_form",
+            "wid": "self",
             "event": "submit",
             "actiontype": "urlwidget",
             "target": "app.rag_main_content",
