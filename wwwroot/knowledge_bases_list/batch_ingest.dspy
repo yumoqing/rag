@@ -9,6 +9,14 @@ async with get_sor_context(env, 'rag') as sor:
         "SELECT id, file_name, file_size, file_path FROM documents WHERE kb_id=${kb_id}$ AND (chunk_count IS NULL OR chunk_count=0 OR status='pending') LIMIT 20",
         {"kb_id": kb_id})
     rows = [dict(r) for r in recs]
+    krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+    emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip() if krecs else 'clip-vith14'
+if emb_engine == 'bge-m3':
+    emb_url = 'https://embedding.opencomputing.net:10443/txte/api/embed'
+    emb_model = 'bge-m3'
+else:
+    emb_url = 'https://embedding.opencomputing.net:10443/mme/api/embed'
+    emb_model = 'CLIP-ViT-H-14'
 
 if not rows:
     return json.dumps({"widgettype": "Text", "options": {"text": "No unprocessed documents found"}}, ensure_ascii=False)
@@ -173,8 +181,8 @@ async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as ses
 
         # Embed
         try:
-            r2 = await session.post('https://embedding.opencomputing.net:10443/api/embed',
-                json={"texts": chunks, "model": "CLIP-ViT-H-14"})
+            r2 = await session.post(emb_url,
+                json={"texts": chunks, "model": emb_model})
             emb = await r2.json() if r2.status == 200 else {}
             embeddings = emb.get("text_embeddings", emb.get("embeddings", []))
         except:

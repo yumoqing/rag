@@ -75,13 +75,28 @@ hits = []
 raw_rows = []
 kw_rows = []
 
+# 读知识库向量引擎，决定用文本(bge-m3 /txte)还是多媒体(CLIP /mme) embedding
+emb_engine = 'clip-vith14'
+try:
+    async with get_sor_context(env, 'rag') as sor:
+        krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+        if krecs:
+            emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
+except: pass
+if emb_engine == 'bge-m3':
+    emb_url = 'https://embedding.opencomputing.net:10443/txte/api/embed'
+    emb_model = 'bge-m3'
+else:
+    emb_url = 'https://embedding.opencomputing.net:10443/mme/api/embed'
+    emb_model = 'CLIP-ViT-H-14'
+
 if query:
     # 1. Embed
     vec = []
     try:
         client = StreamHttpClient()
-        resp = await client.request('POST', 'https://embedding.opencomputing.net:10443/api/embed',
-            json={"texts": [query], "model": "CLIP-ViT-H-14"})
+        resp = await client.request('POST', emb_url,
+            json={"texts": [query], "model": emb_model})
         emb = json.loads(resp)
         vec = emb.get("text_embeddings", emb.get("embeddings", [[]]))[0]
     except:

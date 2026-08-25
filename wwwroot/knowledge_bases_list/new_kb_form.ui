@@ -10,7 +10,8 @@
                 "cols": 1,
                 "fields": [
                     {"name": "name", "label": "名称", "uitype": "str", "required": true},
-                    {"name": "description", "label": "描述", "uitype": "text"}
+                    {"name": "description", "label": "描述", "uitype": "text"},
+                    {"name": "embedding_type", "label": "向量引擎", "uitype": "code", "value": "clip-vith14", "dataurl": "{{entire_url('./embedding_options.dspy')}}"}
                 ]
             }
         }

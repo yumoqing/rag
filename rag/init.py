@@ -113,7 +113,7 @@ async def search_handler(request, params_kw, *args, **kwargs):
         # Process query + media → embedding vector
         query_vec = None
         if query or file_data:
-            query_vec = await _build_search_vector(query, file_data, file_name)
+            query_vec = await _build_search_vector(query, file_data, file_name, env, kb_id)
 
         if not query_vec:
             return json.dumps({"status": "SUCCEEDED", "data": {"results": [], "total": 0, "message": "no query or file provided"}}, ensure_ascii=False)
@@ -181,8 +181,8 @@ async def _resolve_search_kbs(env, userorgid, kb_id):
         return [r.id for r in recs]
 
 
-async def _build_search_vector(query, file_data, file_name):
-    """Build search embedding from text query + media file"""
+async def _build_search_vector(query, file_data, file_name, env=None, kb_id=''):
+    """Build search embedding from text query + media file（按 kb 向量引擎选端点）"""
     texts = []
     if query:
         texts.append(query)
@@ -216,11 +216,23 @@ async def _build_search_vector(query, file_data, file_name):
 
     combined = " ".join(texts)
     try:
-        resp = await _call_uapi("rag-embedding", "embed", {
-            "texts": [combined],
-            "model": "CLIP-ViT-H-14"
-        })
-        vecs = resp.get("embeddings", []) if isinstance(resp, dict) else []
+        emb_engine = 'clip-vith14'
+        if env is not None and kb_id:
+            async with get_sor_context(env, 'rag') as sor:
+                krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+                if krecs:
+                    emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
+        if emb_engine == 'bge-m3':
+            emb_url = 'https://embedding.opencomputing.net:10443/txte/api/embed'
+            emb_model = 'bge-m3'
+        else:
+            emb_url = 'https://embedding.opencomputing.net:10443/mme/api/embed'
+            emb_model = 'CLIP-ViT-H-14'
+        import aiohttp
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+            async with s.post(emb_url, json={"texts": [combined], "model": emb_model}) as resp:
+                emb_resp = await resp.json()
+        vecs = emb_resp.get("text_embeddings", emb_resp.get("embeddings", [])) if isinstance(emb_resp, dict) else []
         return vecs[0] if vecs else None
     except Exception as e:
         exception(f"query embedding failed: {e}")
@@ -480,11 +492,24 @@ async def _rag_ingest_async(env, text, kb_id, doc_id):
         return {"chunks": 0}
     chunk_count = len(chunks)
 
-    # 1. Embedding
+    # 1. Embedding（按知识库向量引擎选文本/多模态端点）
     try:
-        emb_resp = await _call_uapi("rag-embedding", "embed",
-                                    {"texts": chunks, "model": "CLIP-ViT-H-14"})
-        embeddings = emb_resp.get("embeddings", []) if isinstance(emb_resp, dict) else []
+        emb_engine = 'clip-vith14'
+        async with get_sor_context(env, 'rag') as sor:
+            krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+            if krecs:
+                emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
+        if emb_engine == 'bge-m3':
+            emb_url = 'https://embedding.opencomputing.net:10443/txte/api/embed'
+            emb_model = 'bge-m3'
+        else:
+            emb_url = 'https://embedding.opencomputing.net:10443/mme/api/embed'
+            emb_model = 'CLIP-ViT-H-14'
+        import aiohttp
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+            async with s.post(emb_url, json={"texts": chunks, "model": emb_model}) as resp:
+                emb_resp = await resp.json()
+        embeddings = emb_resp.get("text_embeddings", emb_resp.get("embeddings", [])) if isinstance(emb_resp, dict) else []
     except Exception as e:
         exception(f"embedding failed: {e}")
         embeddings = []
