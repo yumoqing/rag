@@ -16,7 +16,7 @@ async with get_sor_context(env, 'rag') as sor:
             size_str = "%.0fKB" % (total_size / 1024)
         else:
             size_str = str(total_size) + "B"
-        engine = r.embedding_engine or "CLIP"
+        engine = {'bge-m3': '文本 bge-m3', 'clip-vith14': '多媒体 CLIP', 'CLIP ViT-H-14': '多媒体 CLIP'}.get((r.embedding_engine or '').strip(), (r.embedding_engine or 'CLIP'))
         idstr = str(r.id)
         namestr = r.name or ''
         cards.append({

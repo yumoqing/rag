@@ -41,7 +41,7 @@ async def kb_list_handler(request, params_kw, *args, **kwargs):
                     size_str = f"{total_size/1024:.0f}KB"
                 else:
                     size_str = f"{total_size}B"
-                engine = r.embedding_engine or "CLIP"
+                engine = {'bge-m3': '文本 bge-m3', 'clip-vith14': '多媒体 CLIP', 'CLIP ViT-H-14': '多媒体 CLIP'}.get((r.embedding_engine or '').strip(), (r.embedding_engine or 'CLIP'))
                 card = {"widgettype":"VBox","options":{"cwidth":16,"cheight":12,"bgcolor":"#f0f7ff","padding":"16px","css":"card clickable","border":"1px solid #d0e4f7"},"subwidgets":[
                     {"widgettype":"Text","options":{"text":"📚 " + str(r.name),"cfontsize":16,"fontWeight":"bold"}},
                     {"widgettype":"Text","options":{"text":str(engine)+" · 1024维","cfontsize":12,"color":"#888"}},
