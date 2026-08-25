@@ -51,7 +51,7 @@ if tag_ids_str:
                 for i, tid in enumerate(wanted_tags):
                     placeholders.append("${tid_" + str(i) + "}$")
                     nsq["tid_" + str(i)] = tid
-                sql = ("SELECT media_id FROM media_tags "
+                sql = ("SELECT media_id FROM rag_media_tags "
                        "WHERE " + kb_filter + "media_type='document' AND tag_id IN (" + ",".join(placeholders) + ") "
                        "GROUP BY media_id HAVING COUNT(DISTINCT tag_id)=" + str(len(wanted_tags)))
                 recs = await sor.sqlExe(sql, nsq)
@@ -79,7 +79,7 @@ kw_rows = []
 emb_engine = 'clip-vith14'
 try:
     async with get_sor_context(env, 'rag') as sor:
-        krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+        krecs = await sor.sqlExe("SELECT embedding_engine FROM rag_knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
         if krecs:
             emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
 except: pass
@@ -126,7 +126,7 @@ if query:
         for i, t in enumerate(tokens):
             conds.append("content LIKE ${kw_" + str(i) + "}$")
             nsq["kw_" + str(i)] = "%" + t + "%"
-        ksql = "SELECT id, doc_id, content FROM document_chunks WHERE kb_id=${kb_id}$ AND (" + " OR ".join(conds) + ") LIMIT 20"
+        ksql = "SELECT id, doc_id, content FROM rag_document_chunks WHERE kb_id=${kb_id}$ AND (" + " OR ".join(conds) + ") LIMIT 20"
         async with get_sor_context(env, 'rag') as sor:
             krecs = await sor.sqlExe(ksql, nsq)
         for r in krecs:
@@ -145,7 +145,7 @@ if query:
         chunk_text = ''
         async with get_sor_context(env, 'rag') as sor:
             recs = await sor.sqlExe(
-                "SELECT content, doc_id, metadata FROM document_chunks WHERE id=${id}$",
+                "SELECT content, doc_id, metadata FROM rag_document_chunks WHERE id=${id}$",
                 {"id": rid})
             chunk_meta = {}
             if recs:
@@ -190,7 +190,7 @@ else:
                     placeholders2.append("${did_" + str(i) + "}$")
                     nsq2["did_" + str(i)] = did
                 # Get documents (exclude face/voice generated derivatives)
-                sql2 = ("SELECT id, file_name, kb_id, file_path FROM documents WHERE " + kb_cond +
+                sql2 = ("SELECT id, file_name, kb_id, file_path FROM rag_documents WHERE " + kb_cond +
                         "id IN (" + ",".join(placeholders2) + ") AND (metadata IS NULL OR metadata NOT LIKE '%%\"face\"%%') ORDER BY created_at DESC LIMIT " + str(top_k * 2))
                 docs = await sor.sqlExe(sql2, nsq2)
                 doc_list = [(r.id, r.file_name or '', r.kb_id or '', r.file_path or '') for r in docs]
@@ -203,7 +203,7 @@ else:
                     for i, did in enumerate(doc_ids):
                         chunk_placeholders.append("${cdid_" + str(i) + "}$")
                         nsq_c["cdid_" + str(i)] = did
-                    chunks_sql = ("SELECT id, doc_id, content FROM document_chunks WHERE doc_id IN (" +
+                    chunks_sql = ("SELECT id, doc_id, content FROM rag_document_chunks WHERE doc_id IN (" +
                                   ",".join(chunk_placeholders) + ") ORDER BY created_at DESC LIMIT " + str(top_k))
                     chunk_recs = await sor.sqlExe(chunks_sql, nsq_c)
                     chunks_by_doc = {}

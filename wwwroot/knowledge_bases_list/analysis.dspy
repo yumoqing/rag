@@ -6,7 +6,7 @@ rows = []
 async with get_sor_context(env, 'rag') as sor:
     recs = await sor.sqlExe(
         "SELECT id, file_name, file_size, file_type, file_path, metadata, status, chunk_count "
-        "FROM documents WHERE kb_id=${kb_id}$ AND metadata IS NOT NULL AND metadata != '' "
+        "FROM rag_documents WHERE kb_id=${kb_id}$ AND metadata IS NOT NULL AND metadata != '' "
         "ORDER BY created_at DESC LIMIT 50",
         {"kb_id": kb_id})
     rows = [dict(r) for r in recs]

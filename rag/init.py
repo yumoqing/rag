@@ -27,10 +27,10 @@ async def kb_list_handler(request, params_kw, *args, **kwargs):
     try:
         userorgid = await env.get_userorgid()
         async with get_sor_context(env, 'rag') as sor:
-            recs = await sor.R("knowledge_bases", {})
+            recs = await sor.R("rag_knowledge_bases", {})
             cards = []
             for r in recs:
-                doc_recs = await sor.R("documents", {"kb_id": r.id})
+                doc_recs = await sor.R("rag_documents", {"kb_id": r.id})
                 doc_count = len(doc_recs)
                 total_size = r.total_size or 0
                 if total_size >= 1073741824:
@@ -64,7 +64,7 @@ async def engines_handler(request, params_kw, *args, **kwargs):
     try:
         userorgid = await env.get_userorgid()
         async with get_sor_context(env, 'rag') as sor:
-            sql = "SELECT * FROM engine_configs WHERE status='active' AND (org_id IS NULL OR org_id=${org_id}$) ORDER BY engine_type, priority DESC"
+            sql = "SELECT * FROM rag_engine_configs WHERE status='active' AND (org_id IS NULL OR org_id=${org_id}$) ORDER BY engine_type, priority DESC"
             recs = await sor.sqlExe(sql, {"org_id": userorgid})
             rows = [dict(r) for r in recs]
             return json.dumps({"status": "SUCCEEDED", "data": {"rows": rows, "total": len(rows)}}, ensure_ascii=False, default=str)
@@ -173,10 +173,10 @@ async def _resolve_search_kbs(env, userorgid, kb_id):
     """Resolve KB IDs: specific or all org KBs"""
     async with get_sor_context(env, 'rag') as sor:
         if kb_id:
-            recs = await sor.R("knowledge_bases", {"id": kb_id})
+            recs = await sor.R("rag_knowledge_bases", {"id": kb_id})
             return [r.id for r in recs]
         # All org KBs (global + org-specific)
-        sql = "SELECT id FROM knowledge_bases WHERE org_id IS NULL OR org_id=${org_id}$"
+        sql = "SELECT id FROM rag_knowledge_bases WHERE org_id IS NULL OR org_id=${org_id}$"
         recs = await sor.sqlExe(sql, {"org_id": userorgid})
         return [r.id for r in recs]
 
@@ -219,7 +219,7 @@ async def _build_search_vector(query, file_data, file_name, env=None, kb_id=''):
         emb_engine = 'clip-vith14'
         if env is not None and kb_id:
             async with get_sor_context(env, 'rag') as sor:
-                krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+                krecs = await sor.sqlExe("SELECT embedding_engine FROM rag_knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
                 if krecs:
                     emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
         if emb_engine == 'bge-m3':
@@ -287,7 +287,7 @@ async def _enrich_search_results(env, hits):
     async with get_sor_context(env, 'rag') as sor:
         recs = await sor.sqlExe(
             "SELECT id, file_name, file_type, file_size, status, kb_id, created_at "
-            "FROM documents WHERE id IN (" + ",".join(repr(d) for d in doc_ids) + ")", {})
+            "FROM rag_documents WHERE id IN (" + ",".join(repr(d) for d in doc_ids) + ")", {})
         doc_map = {r.id: dict(r) for r in recs}
 
     for h in hits:
@@ -325,9 +325,9 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
         quota_limit = 104857600
         used = 0
         async with get_sor_context(env, 'rag') as sor:
-            rec = await sor.sqlExe("SELECT COALESCE(SUM(file_size),0) AS used FROM documents WHERE org_id=${org_id}$", {"org_id": userorgid})
+            rec = await sor.sqlExe("SELECT COALESCE(SUM(file_size),0) AS used FROM rag_documents WHERE org_id=${org_id}$", {"org_id": userorgid})
             if rec: used = int(rec[0].used)
-            lim = await sor.sqlExe("SELECT limit_bytes FROM org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
+            lim = await sor.sqlExe("SELECT limit_bytes FROM rag_org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
             if lim: quota_limit = int(lim[0].limit_bytes)
         if used + file_size > quota_limit:
             return json.dumps({"error": "storage_quota_exceeded",
@@ -342,7 +342,7 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
         # Create document record
         async with get_sor_context(env, 'rag') as sor:
             await sor.sqlExe(
-                "INSERT INTO documents (id, kb_id, file_name, file_type, file_size, file_path, mime_type, status, org_id, created_at, updated_at) "
+                "INSERT INTO rag_documents (id, kb_id, file_name, file_type, file_size, file_path, mime_type, status, org_id, created_at, updated_at) "
                 "VALUES (${id}$, ${kb_id}$, ${file_name}$, ${file_type}$, ${file_size}$, ${file_path}$, ${mime_type}$, 'pending', ${org_id}$, NOW(), NOW())",
                 {"id": doc_id, "kb_id": kb_id, "file_name": file_name, "file_type": file_type,
                  "file_size": file_size, "file_path": web_path,
@@ -350,7 +350,7 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
 
             # Update KB stats
             await sor.sqlExe(
-                "UPDATE knowledge_bases SET doc_count=doc_count+1, total_size=total_size+${size}$ WHERE id=${kb_id}$",
+                "UPDATE rag_knowledge_bases SET doc_count=doc_count+1, total_size=total_size+${size}$ WHERE id=${kb_id}$",
                 {"size": file_size, "kb_id": kb_id})
 
         # Trigger async ingest for text-based files via uapi
@@ -363,17 +363,17 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
                 async with get_sor_context(env, 'rag') as sor:
                     chunks_n = ingest_result.get("chunks", 0) if ingest_result else 0
                     await sor.sqlExe(
-                        "UPDATE documents SET status='done', chunk_count=${chunks}$ WHERE id=${id}$",
+                        "UPDATE rag_documents SET status='done', chunk_count=${chunks}$ WHERE id=${id}$",
                         {"chunks": chunks_n, "id": doc_id})
                     if chunks_n:
                         await sor.sqlExe(
-                            "UPDATE knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$",
+                            "UPDATE rag_knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$",
                             {"n": chunks_n, "kb_id": kb_id})
             except Exception as e:
                 exception(f"uapi ingest failed: {e}")
                 async with get_sor_context(env, 'rag') as sor:
                     await sor.sqlExe(
-                        "UPDATE documents SET status='error' WHERE id=${id}$", {"id": doc_id})
+                        "UPDATE rag_documents SET status='error' WHERE id=${id}$", {"id": doc_id})
 
         return json.dumps({
             "status": "SUCCEEDED",
@@ -399,13 +399,13 @@ async def doc_delete_handler(request, params_kw, *args, **kwargs):
 
         async with get_sor_context(env, 'rag') as sor:
             # Get document info
-            recs = await sor.R("documents", {"id": doc_id})
+            recs = await sor.R("rag_documents", {"id": doc_id})
             if not recs:
                 return json.dumps({"error": "document not found"})
             doc = recs[0]
 
             # Get chunks to clean VDB
-            chunks = await sor.R("document_chunks", {"doc_id": doc_id})
+            chunks = await sor.R("rag_document_chunks", {"doc_id": doc_id})
 
             # Delete from VDB
             if chunks:
@@ -424,14 +424,14 @@ async def doc_delete_handler(request, params_kw, *args, **kwargs):
                 exception(f"graph delete failed: {e}")
 
             # Delete DB records
-            await sor.sqlExe("DELETE FROM document_chunks WHERE doc_id=${id}$", {"id": doc_id})
-            await sor.sqlExe("DELETE FROM entities WHERE kb_id=${kb_id}$", {"kb_id": doc.kb_id})
-            await sor.sqlExe("DELETE FROM entity_relations WHERE kb_id=${kb_id}$", {"kb_id": doc.kb_id})
-            await sor.sqlExe("DELETE FROM documents WHERE id=${id}$", {"id": doc_id})
+            await sor.sqlExe("DELETE FROM rag_document_chunks WHERE doc_id=${id}$", {"id": doc_id})
+            await sor.sqlExe("DELETE FROM rag_entities WHERE kb_id=${kb_id}$", {"kb_id": doc.kb_id})
+            await sor.sqlExe("DELETE FROM rag_entity_relations WHERE kb_id=${kb_id}$", {"kb_id": doc.kb_id})
+            await sor.sqlExe("DELETE FROM rag_documents WHERE id=${id}$", {"id": doc_id})
 
             # Update KB stats
             await sor.sqlExe(
-                "UPDATE knowledge_bases SET doc_count=GREATEST(doc_count-1,0), total_size=GREATEST(total_size-${size}$,0), chunk_count=GREATEST(chunk_count-${n}$,0) WHERE id=${kb_id}$",
+                "UPDATE rag_knowledge_bases SET doc_count=GREATEST(doc_count-1,0), total_size=GREATEST(total_size-${size}$,0), chunk_count=GREATEST(chunk_count-${n}$,0) WHERE id=${kb_id}$",
                 {"size": doc.file_size, "n": len(chunks), "kb_id": doc.kb_id})
 
         # Delete file from disk
@@ -496,7 +496,7 @@ async def _rag_ingest_async(env, text, kb_id, doc_id):
     try:
         emb_engine = 'clip-vith14'
         async with get_sor_context(env, 'rag') as sor:
-            krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+            krecs = await sor.sqlExe("SELECT embedding_engine FROM rag_knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
             if krecs:
                 emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
         if emb_engine == 'bge-m3':
@@ -552,7 +552,7 @@ async def _rag_ingest_async(env, text, kb_id, doc_id):
     async with get_sor_context(env, 'rag') as sor:
         for i, (chunk_text, vid) in enumerate(zip(chunks, vector_ids)):
             await sor.sqlExe(
-                "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, metadata, created_at) "
+                "INSERT INTO rag_document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, metadata, created_at) "
                 "VALUES (${id}$, ${doc_id}$, ${kb_id}$, ${idx}$, ${content}$, ${vid}$, NOW())",
                 {"id": f"{doc_id}_c{i}", "doc_id": doc_id, "kb_id": kb_id,
                  "idx": i, "content": chunk_text[:2000], "vid": vid})
@@ -642,7 +642,7 @@ async def dir_create_handler(request, params_kw, *args, **kwargs):
         async with get_sor_context(env, 'rag') as sor:
             dir_id = uuid.uuid4().hex
             await sor.sqlExe(
-                "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, chunk_type, content, description, created_at) "
+                "INSERT INTO rag_document_chunks (id, doc_id, kb_id, chunk_index, chunk_type, content, description, created_at) "
                 "VALUES (${id}$, '', ${kb_id}$, 0, 'directory', ${name}$, ${parent}$, NOW())",
                 {"id": dir_id, "kb_id": kb_id, "name": dir_name, "parent": parent_id})
             return json.dumps({"status": "SUCCEEDED", "dir_id": dir_id})
@@ -659,7 +659,7 @@ async def dir_delete_handler(request, params_kw, *args, **kwargs):
         if not item_id:
             return json.dumps({"error": "item_id required"})
         async with get_sor_context(env, 'rag') as sor:
-            await sor.sqlExe("DELETE FROM document_chunks WHERE id=${id}$ OR doc_id=${id}$", {"id": item_id})
+            await sor.sqlExe("DELETE FROM rag_document_chunks WHERE id=${id}$ OR doc_id=${id}$", {"id": item_id})
             return json.dumps({"status": "SUCCEEDED"})
     except Exception as e:
         exception(f"dir_delete: {e}")
@@ -676,11 +676,11 @@ async def dir_list_handler(request, params_kw, *args, **kwargs):
         async with get_sor_context(env, 'rag') as sor:
             # Get directories (chunk_type='directory')
             dirs = await sor.sqlExe(
-                "SELECT id, content as label, description as parent_id FROM document_chunks WHERE kb_id=${kb_id}$ AND chunk_type='directory'",
+                "SELECT id, content as label, description as parent_id FROM rag_document_chunks WHERE kb_id=${kb_id}$ AND chunk_type='directory'",
                 {"kb_id": kb_id})
             # Get files (documents table)
             docs = await sor.sqlExe(
-                "SELECT id, file_name as label, '' as parent_id FROM documents WHERE kb_id=${kb_id}$",
+                "SELECT id, file_name as label, '' as parent_id FROM rag_documents WHERE kb_id=${kb_id}$",
                 {"kb_id": kb_id})
             items = []
             for d in dirs:
@@ -705,14 +705,14 @@ async def tag_create_handler(request, params_kw, *args, **kwargs):
         userorgid = await env.get_userorgid()
         async with get_sor_context(env, 'rag') as sor:
             existing = await sor.sqlExe(
-                "SELECT id, color FROM tags WHERE kb_id=${kb_id}$ AND name=${name}$ AND org_id=${org_id}$",
+                "SELECT id, color FROM rag_tags WHERE kb_id=${kb_id}$ AND name=${name}$ AND org_id=${org_id}$",
                 {"kb_id": kb_id, "name": name, "org_id": userorgid})
             if existing:
                 return json.dumps({"status": "SUCCEEDED", "tag_id": existing[0].id, "name": name,
                                    "color": existing[0].color, "duplicate": True}, ensure_ascii=False)
             tag_id = uuid.uuid4().hex
             await sor.sqlExe(
-                "INSERT INTO tags (id, kb_id, name, color, org_id, created_at) "
+                "INSERT INTO rag_tags (id, kb_id, name, color, org_id, created_at) "
                 "VALUES (${id}$, ${kb_id}$, ${name}$, ${color}$, ${org_id}$, NOW())",
                 {"id": tag_id, "kb_id": kb_id, "name": name, "color": color, "org_id": userorgid})
             return json.dumps({"status": "SUCCEEDED", "tag_id": tag_id, "name": name, "color": color})
@@ -730,7 +730,7 @@ async def tag_list_handler(request, params_kw, *args, **kwargs):
             return json.dumps({"error": "kb_id required"})
         userorgid = await env.get_userorgid()
         async with get_sor_context(env, 'rag') as sor:
-            recs = await sor.R("tags", {"kb_id": kb_id, "org_id": userorgid})
+            recs = await sor.R("rag_tags", {"kb_id": kb_id, "org_id": userorgid})
             tags = [{"id": r.id, "name": r.name, "color": r.color, "created_at": str(r.created_at)} for r in recs]
             return json.dumps({"status": "SUCCEEDED", "tags": tags}, ensure_ascii=False, default=str)
     except Exception as e:
@@ -746,8 +746,8 @@ async def tag_delete_handler(request, params_kw, *args, **kwargs):
         if not tag_id:
             return json.dumps({"error": "tag_id required"})
         async with get_sor_context(env, 'rag') as sor:
-            await sor.sqlExe("DELETE FROM media_tags WHERE tag_id=${id}$", {"id": tag_id})
-            await sor.sqlExe("DELETE FROM tags WHERE id=${id}$", {"id": tag_id})
+            await sor.sqlExe("DELETE FROM rag_media_tags WHERE tag_id=${id}$", {"id": tag_id})
+            await sor.sqlExe("DELETE FROM rag_tags WHERE id=${id}$", {"id": tag_id})
             return json.dumps({"status": "SUCCEEDED", "tag_id": tag_id})
     except Exception as e:
         exception(f"tag_delete: {e}, {format_exc()}")
@@ -769,7 +769,7 @@ async def tag_assign_handler(request, params_kw, *args, **kwargs):
         async with get_sor_context(env, 'rag') as sor:
             mt_id = uuid.uuid4().hex
             await sor.sqlExe(
-                "INSERT INTO media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
+                "INSERT INTO rag_media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                 "VALUES (${id}$, ${kb_id}$, ${type}$, ${mid}$, ${tid}$, NOW())",
                 {"id": mt_id, "kb_id": kb_id, "type": media_type, "mid": media_id, "tid": tag_id})
             return json.dumps({"status": "SUCCEEDED", "media_tag_id": mt_id})
@@ -789,7 +789,7 @@ async def tag_unassign_handler(request, params_kw, *args, **kwargs):
             return json.dumps({"error": "media_type, media_id, tag_id required"})
         async with get_sor_context(env, 'rag') as sor:
             await sor.sqlExe(
-                "DELETE FROM media_tags WHERE media_type=${type}$ AND media_id=${mid}$ AND tag_id=${tid}$",
+                "DELETE FROM rag_media_tags WHERE media_type=${type}$ AND media_id=${mid}$ AND tag_id=${tid}$",
                 {"type": media_type, "mid": media_id, "tid": tag_id})
             return json.dumps({"status": "SUCCEEDED"})
     except Exception as e:
@@ -807,8 +807,8 @@ async def tag_media_tags_handler(request, params_kw, *args, **kwargs):
             return json.dumps({"error": "media_type and media_id required"})
         async with get_sor_context(env, 'rag') as sor:
             recs = await sor.sqlExe(
-                "SELECT t.id, t.name, t.color FROM media_tags mt "
-                "JOIN tags t ON mt.tag_id=t.id "
+                "SELECT t.id, t.name, t.color FROM rag_media_tags mt "
+                "JOIN rag_tags t ON mt.tag_id=t.id "
                 "WHERE mt.media_type=${type}$ AND mt.media_id=${mid}$",
                 {"type": media_type, "mid": media_id})
             tags = [{"id": r.id, "name": r.name, "color": r.color} for r in recs]
@@ -835,7 +835,7 @@ async def tag_search_handler(request, params_kw, *args, **kwargs):
                 media_ids_by_tag = []
                 for tid in tag_ids:
                     recs = await sor.sqlExe(
-                        "SELECT media_type, media_id FROM media_tags WHERE kb_id=${kb_id}$ AND tag_id=${tid}$",
+                        "SELECT media_type, media_id FROM rag_media_tags WHERE kb_id=${kb_id}$ AND tag_id=${tid}$",
                         {"kb_id": kb_id, "tid": tid})
                     mids = {(r.media_type, r.media_id) for r in recs}
                     media_ids_by_tag.append(mids)
@@ -855,19 +855,19 @@ async def tag_search_handler(request, params_kw, *args, **kwargs):
                 results = []
                 if doc_ids:
                     docs = await sor.sqlExe(
-                        "SELECT id, file_name, file_type, file_size, status, created_at FROM documents WHERE id IN (${ids}$)",
+                        "SELECT id, file_name, file_type, file_size, status, created_at FROM rag_documents WHERE id IN (${ids}$)",
                         {"ids": doc_ids})
                     for d in docs:
                         results.append({"type": "document", "id": d.id, "name": d.file_name, "file_type": d.file_type, "size": d.file_size, "status": d.status, "created_at": str(d.created_at)})
                 if face_ids:
                     faces = await sor.sqlExe(
-                        "SELECT id, name, description, face_embedding_id, created_at FROM entities WHERE id IN (${ids}$) AND entity_type='person'",
+                        "SELECT id, name, description, face_embedding_id, created_at FROM rag_entities WHERE id IN (${ids}$) AND entity_type='person'",
                         {"ids": face_ids})
                     for f in faces:
                         results.append({"type": "face", "id": f.id, "name": f.name, "description": f.description, "created_at": str(f.created_at)})
                 if voice_ids:
                     voices = await sor.sqlExe(
-                        "SELECT id, name, description, voice_embedding_id, created_at FROM entities WHERE id IN (${ids}$) AND entity_type='voice'",
+                        "SELECT id, name, description, voice_embedding_id, created_at FROM rag_entities WHERE id IN (${ids}$) AND entity_type='voice'",
                         {"ids": voice_ids})
                     for v in voices:
                         results.append({"type": "voice", "id": v.id, "name": v.name, "description": v.description, "created_at": str(v.created_at)})
@@ -877,7 +877,7 @@ async def tag_search_handler(request, params_kw, *args, **kwargs):
                     vdb_docs = []
                     for doc in tag_filtered_docs:
                         chunks = await sor.sqlExe(
-                            "SELECT content FROM document_chunks WHERE doc_id=${id}$ LIMIT 3",
+                            "SELECT content FROM rag_document_chunks WHERE doc_id=${id}$ LIMIT 3",
                             {"id": doc["id"]})
                         for c in chunks:
                             vdb_docs.append({"doc_id": doc["id"], "content": c.content})
@@ -911,20 +911,20 @@ async def tag_sync_handler(request, params_kw, *args, **kwargs):
         wanted_ids = [t.strip() for t in tag_ids_str.split(",") if t.strip()]
         async with get_sor_context(env, 'rag') as sor:
             recs = await sor.sqlExe(
-                "SELECT id, tag_id FROM media_tags WHERE media_type=${type}$ AND media_id=${mid}$",
+                "SELECT id, tag_id FROM rag_media_tags WHERE media_type=${type}$ AND media_id=${mid}$",
                 {"type": media_type, "mid": media_id})
             current = {r.tag_id: r.id for r in recs}
             removed = 0
             for tid, mt_id in current.items():
                 if tid not in wanted_ids:
-                    await sor.sqlExe("DELETE FROM media_tags WHERE id=${id}$", {"id": mt_id})
+                    await sor.sqlExe("DELETE FROM rag_media_tags WHERE id=${id}$", {"id": mt_id})
                     removed += 1
             added = 0
             for tid in wanted_ids:
                 if tid not in current:
                     mt_id = uuid.uuid4().hex
                     await sor.sqlExe(
-                        "INSERT INTO media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
+                        "INSERT INTO rag_media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                         "VALUES (${id}$, ${kb_id}$, ${type}$, ${mid}$, ${tid}$, NOW())",
                         {"id": mt_id, "kb_id": kb_id, "type": media_type, "mid": media_id, "tid": tid})
                     added += 1

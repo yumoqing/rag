@@ -6,10 +6,10 @@ env = request._run_ns
 rows = []
 async with get_sor_context(env, 'rag') as sor:
     recs = await sor.sqlExe(
-        "SELECT id, file_name, file_size, file_path FROM documents WHERE kb_id=${kb_id}$ AND (chunk_count IS NULL OR chunk_count=0 OR status='pending') LIMIT 20",
+        "SELECT id, file_name, file_size, file_path FROM rag_documents WHERE kb_id=${kb_id}$ AND (chunk_count IS NULL OR chunk_count=0 OR status='pending') LIMIT 20",
         {"kb_id": kb_id})
     rows = [dict(r) for r in recs]
-    krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+    krecs = await sor.sqlExe("SELECT embedding_engine FROM rag_knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
     emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip() if krecs else 'clip-vith14'
 if emb_engine == 'bge-m3':
     emb_url = 'https://embedding.opencomputing.net:10443/txte/api/embed'
@@ -156,7 +156,7 @@ async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as ses
             meta = j2.dumps({"face": face_count, "speakers": speakers}, ensure_ascii=False)
             async with get_sor_context(env, 'rag') as sor:
                 await sor.sqlExe(
-                    "UPDATE documents SET status='done',chunk_count=0,metadata=${meta}$ WHERE id=${id}$",
+                    "UPDATE rag_documents SET status='done',chunk_count=0,metadata=${meta}$ WHERE id=${id}$",
                     {"meta": meta, "id": fid})
             results.append(f"🎬 {fn}: faces={face_count} speakers={speakers}")
             continue
@@ -201,10 +201,10 @@ async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as ses
         async with get_sor_context(env, 'rag') as sor:
             for i, ct in enumerate(chunks):
                 await sor.sqlExe(
-                    "INSERT INTO document_chunks (id,doc_id,kb_id,chunk_index,content,vector_id,created_at) VALUES (${id}$,${doc_id}$,${kb_id}$,${idx}$,${content}$,${vid}$,NOW())",
+                    "INSERT INTO rag_document_chunks (id,doc_id,kb_id,chunk_index,content,vector_id,created_at) VALUES (${id}$,${doc_id}$,${kb_id}$,${idx}$,${content}$,${vid}$,NOW())",
                     {"id": f"{fid}_c{i}", "doc_id": fid, "kb_id": kb_id, "idx": i, "content": ct[:2000], "vid": ""})
-            await sor.sqlExe("UPDATE documents SET status='done',chunk_count=${n}$ WHERE id=${id}$", {"n": len(chunks), "id": fid})
-            await sor.sqlExe("UPDATE knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$", {"n": len(chunks), "kb_id": kb_id})
+            await sor.sqlExe("UPDATE rag_documents SET status='done',chunk_count=${n}$ WHERE id=${id}$", {"n": len(chunks), "id": fid})
+            await sor.sqlExe("UPDATE rag_knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$", {"n": len(chunks), "kb_id": kb_id})
 
         results.append(f"✓ {fn}: {len(text)} chars → {len(chunks)} chunks")
 

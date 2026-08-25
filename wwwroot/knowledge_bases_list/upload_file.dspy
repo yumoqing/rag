@@ -23,9 +23,9 @@ def fmt_bytes(n):
 quota_limit = 104857600
 used = 0
 async with get_sor_context(env, 'rag') as sor:
-    rec = await sor.sqlExe("SELECT COALESCE(SUM(file_size),0) AS used FROM documents WHERE org_id=${org_id}$", {"org_id": userorgid})
+    rec = await sor.sqlExe("SELECT COALESCE(SUM(file_size),0) AS used FROM rag_documents WHERE org_id=${org_id}$", {"org_id": userorgid})
     if rec: used = int(rec[0].used)
-    lim = await sor.sqlExe("SELECT limit_bytes FROM org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
+    lim = await sor.sqlExe("SELECT limit_bytes FROM rag_org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
     if lim: quota_limit = int(lim[0].limit_bytes)
 if used + file_size > quota_limit:
     return json.dumps({"status": "error", "error": "storage_quota_exceeded",
@@ -52,7 +52,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
     emb_engine = 'clip-vith14'
     try:
         async with db.sqlorContext('rag') as sor:
-            krecs = await sor.sqlExe("SELECT embedding_engine FROM knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
+            krecs = await sor.sqlExe("SELECT embedding_engine FROM rag_knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
             if krecs:
                 emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
     except: pass
@@ -118,7 +118,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
             try:
                 async with db.sqlorContext('rag') as sor:
                     await sor.sqlExe(
-                        "UPDATE documents SET status='failed', metadata=${meta}$, updated_at=NOW() WHERE id=${id}$",
+                        "UPDATE rag_documents SET status='failed', metadata=${meta}$, updated_at=NOW() WHERE id=${id}$",
                         {"id": doc_id, "meta": json.dumps({"error": "文本知识库不支持媒体文件，请上传文本类文件(txt/md/pdf/docx等)或改用多媒体知识库"}, ensure_ascii=False)})
             except: pass
             return
@@ -195,7 +195,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
                                 chunk_meta["bboxes"] = frame_bboxes
                             async with db.sqlorContext('rag') as sor:
                                 await sor.sqlExe(
-                                    "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, metadata, created_at) "
+                                    "INSERT INTO rag_document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, metadata, created_at) "
                                     "VALUES (${id}$, ${doc_id}$, ${kb_id}$, 0, ${content}$, ${vid}$, ${meta}$, NOW())",
                                     {"id": doc_id + "_c0", "doc_id": doc_id, "kb_id": kb_id,
                                      "content": file_name, "vid": doc_id + "_c0",
@@ -277,7 +277,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
                     for i, chunk_text in enumerate(chunks):
                         vid = vector_ids[i] if i < len(vector_ids) else ''
                         await sor.sqlExe(
-                            "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
+                            "INSERT INTO rag_document_chunks (id, doc_id, kb_id, chunk_index, content, vector_id, created_at) "
                             "VALUES (${id}$, ${doc_id}$, ${kb_id}$, ${idx}$, ${content}$, ${vid}$, NOW())",
                             {"id": doc_id + "_c" + str(i), "doc_id": doc_id, "kb_id": kb_id,
                              "idx": i, "content": chunk_text[:2000], "vid": vid})
@@ -286,7 +286,7 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
         try:
             async with db.sqlorContext('rag') as sor:
                 await sor.sqlExe(
-                    "UPDATE documents SET status='failed', metadata=${meta}$, updated_at=NOW() WHERE id=${id}$",
+                    "UPDATE rag_documents SET status='failed', metadata=${meta}$, updated_at=NOW() WHERE id=${id}$",
                     {"id": doc_id, "meta": json.dumps({"error": str(e)[:300]}, ensure_ascii=False)})
         except: pass
         return
@@ -296,11 +296,11 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
     try:
         async with db.sqlorContext('rag') as sor:
             await sor.sqlExe(
-                "UPDATE documents SET status='done', chunk_count=${chunks}$, metadata=${meta}$, updated_at=NOW() WHERE id=${id}$",
+                "UPDATE rag_documents SET status='done', chunk_count=${chunks}$, metadata=${meta}$, updated_at=NOW() WHERE id=${id}$",
                 {"id": doc_id, "chunks": chunks_n, "meta": meta_json})
             if chunks_n:
                 await sor.sqlExe(
-                    "UPDATE knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$",
+                    "UPDATE rag_knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$",
                     {"n": chunks_n, "kb_id": kb_id})
     except: pass
 
@@ -310,12 +310,12 @@ async def ingest_doc(doc_id, kb_id, file_name, ext_l, real_path):
 # ============================================================
 async with get_sor_context(env, 'rag') as sor:
     await sor.sqlExe(
-        "INSERT INTO documents (id, kb_id, folder_id, file_name, file_type, file_size, file_path, mime_type, status, chunk_count, metadata, org_id, created_at, updated_at) "
+        "INSERT INTO rag_documents (id, kb_id, folder_id, file_name, file_type, file_size, file_path, mime_type, status, chunk_count, metadata, org_id, created_at, updated_at) "
         "VALUES (${id}$, ${kb_id}$, ${folder_id}$, ${file_name}$, 'other', ${file_size}$, ${file_path}$, 'application/octet-stream', 'pending', 0, '{}', ${org_id}$, NOW(), NOW())",
         {"id": doc_id, "kb_id": kb_id, "folder_id": folder_id, "file_name": file_name,
          "file_size": file_size, "file_path": web_path, "org_id": userorgid})
     await sor.sqlExe(
-        "UPDATE knowledge_bases SET doc_count=doc_count+1, total_size=total_size+${size}$ WHERE id=${kb_id}$",
+        "UPDATE rag_knowledge_bases SET doc_count=doc_count+1, total_size=total_size+${size}$ WHERE id=${kb_id}$",
         {"size": file_size, "kb_id": kb_id})
 
 # Fire background ingestion — pass primitives only (no env/request/proxy objects)

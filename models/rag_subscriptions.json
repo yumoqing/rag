@@ -1,0 +1,134 @@
+{
+    "summary": [
+        {
+            "name": "rag_subscriptions",
+            "title": "租户订阅",
+            "primary": [
+                "id"
+            ]
+        }
+    ],
+    "fields": [
+        {
+            "name": "id",
+            "title": "ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "org_id",
+            "title": "机构ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "yes"
+        },
+        {
+            "name": "plan_name",
+            "title": "套餐名称",
+            "type": "str",
+            "length": 64,
+            "nullable": "yes"
+        },
+        {
+            "name": "disk_quota_bytes",
+            "title": "磁盘配额(字节)",
+            "type": "int",
+            "nullable": "yes",
+            "default": "1073741824"
+        },
+        {
+            "name": "disk_used_bytes",
+            "title": "已用磁盘(字节)",
+            "type": "int",
+            "nullable": "yes"
+        },
+        {
+            "name": "doc_quota",
+            "title": "文档数配额",
+            "type": "int",
+            "nullable": "yes",
+            "default": "1000"
+        },
+        {
+            "name": "doc_used",
+            "title": "已用文档数",
+            "type": "int",
+            "nullable": "yes"
+        },
+        {
+            "name": "kb_quota",
+            "title": "知识库数配额",
+            "type": "int",
+            "nullable": "yes",
+            "default": "10"
+        },
+        {
+            "name": "kb_used",
+            "title": "已用知识库数",
+            "type": "int",
+            "nullable": "yes"
+        },
+        {
+            "name": "api_call_quota",
+            "title": "API调用配额(月)",
+            "type": "int",
+            "nullable": "yes",
+            "default": "10000"
+        },
+        {
+            "name": "api_call_used",
+            "title": "已用API调用(月)",
+            "type": "int",
+            "nullable": "yes"
+        },
+        {
+            "name": "start_date",
+            "title": "开始日期",
+            "type": "date",
+            "nullable": "yes"
+        },
+        {
+            "name": "end_date",
+            "title": "结束日期",
+            "type": "date",
+            "nullable": "yes"
+        },
+        {
+            "name": "status",
+            "title": "状态",
+            "type": "str",
+            "length": 16,
+            "nullable": "yes",
+            "default": "active"
+        },
+        {
+            "name": "created_at",
+            "title": "创建时间",
+            "type": "datetime",
+            "nullable": "yes"
+        },
+        {
+            "name": "updated_at",
+            "title": "更新时间",
+            "type": "datetime",
+            "nullable": "yes"
+        }
+    ],
+    "indexes": [
+        {
+            "name": "idx_sub_org",
+            "idxtype": "unique",
+            "idxfields": [
+                "org_id"
+            ]
+        },
+        {
+            "name": "idx_sub_status",
+            "idxtype": "index",
+            "idxfields": [
+                "status"
+            ]
+        }
+    ]
+}

@@ -14,21 +14,21 @@ deleted = {"documents": 0, "chunks": 0, "tags": 0, "media_tags": 0,
 
 async with get_sor_context(env, 'rag') as sor:
     kb = await sor.sqlExe(
-        "SELECT id, name FROM knowledge_bases WHERE id=${id}$ AND (org_id=${org_id}$ OR org_id IS NULL)",
+        "SELECT id, name FROM rag_knowledge_bases WHERE id=${id}$ AND (org_id=${org_id}$ OR org_id IS NULL)",
         {"id": kb_id, "org_id": userorgid})
     if not kb:
         return {"widgettype": "urlwidget",
                 "options": {"url": entire_url('/rag/knowledge_bases_list/index.ui')}}
 
     docs = await sor.sqlExe(
-        "SELECT id, file_path FROM documents WHERE kb_id=${kb_id}$",
+        "SELECT id, file_path FROM rag_documents WHERE kb_id=${kb_id}$",
         {"kb_id": kb_id})
     doc_ids = [d.id for d in docs]
 
     # 1. VDB cleanup
     if doc_ids:
         chunks = await sor.sqlExe(
-            "SELECT vector_id FROM document_chunks WHERE doc_id IN (${ids}$) AND vector_id IS NOT NULL AND vector_id != ''",
+            "SELECT vector_id FROM rag_document_chunks WHERE doc_id IN (${ids}$) AND vector_id IS NOT NULL AND vector_id != ''",
             {"ids": doc_ids})
         vector_ids = [c.vector_id for c in chunks]
         if vector_ids:
@@ -53,40 +53,40 @@ async with get_sor_context(env, 'rag') as sor:
 
         # 3. Entities & relations
         er = await sor.sqlExe(
-            "SELECT COUNT(*) AS cnt FROM entity_relations WHERE kb_id=${kb_id}$",
+            "SELECT COUNT(*) AS cnt FROM rag_entity_relations WHERE kb_id=${kb_id}$",
             {"kb_id": kb_id})
-        await sor.sqlExe("DELETE FROM entity_relations WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
+        await sor.sqlExe("DELETE FROM rag_entity_relations WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
         deleted["entities"] += er[0].cnt if er else 0
 
         ent = await sor.sqlExe(
-            "SELECT COUNT(*) AS cnt FROM entities WHERE kb_id=${kb_id}$",
+            "SELECT COUNT(*) AS cnt FROM rag_entities WHERE kb_id=${kb_id}$",
             {"kb_id": kb_id})
-        await sor.sqlExe("DELETE FROM entities WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
+        await sor.sqlExe("DELETE FROM rag_entities WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
         deleted["entities"] += ent[0].cnt if ent else 0
 
         # 4. Chunks
         ch = await sor.sqlExe(
-            "SELECT COUNT(*) AS cnt FROM document_chunks WHERE doc_id IN (${ids}$)",
+            "SELECT COUNT(*) AS cnt FROM rag_document_chunks WHERE doc_id IN (${ids}$)",
             {"ids": doc_ids})
-        await sor.sqlExe("DELETE FROM document_chunks WHERE doc_id IN (${ids}$)", {"ids": doc_ids})
+        await sor.sqlExe("DELETE FROM rag_document_chunks WHERE doc_id IN (${ids}$)", {"ids": doc_ids})
         deleted["chunks"] = ch[0].cnt if ch else 0
 
     # Media tags
-    mt = await sor.sqlExe("SELECT COUNT(*) AS cnt FROM media_tags WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
-    await sor.sqlExe("DELETE FROM media_tags WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
+    mt = await sor.sqlExe("SELECT COUNT(*) AS cnt FROM rag_media_tags WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
+    await sor.sqlExe("DELETE FROM rag_media_tags WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
     deleted["media_tags"] = mt[0].cnt if mt else 0
 
     # Tags
-    t = await sor.sqlExe("SELECT COUNT(*) AS cnt FROM tags WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
-    await sor.sqlExe("DELETE FROM tags WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
+    t = await sor.sqlExe("SELECT COUNT(*) AS cnt FROM rag_tags WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
+    await sor.sqlExe("DELETE FROM rag_tags WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
     deleted["tags"] = t[0].cnt if t else 0
 
     # Documents
-    await sor.sqlExe("DELETE FROM documents WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
+    await sor.sqlExe("DELETE FROM rag_documents WHERE kb_id=${kb_id}$", {"kb_id": kb_id})
     deleted["documents"] = len(doc_ids)
 
     # KB itself
-    await sor.sqlExe("DELETE FROM knowledge_bases WHERE id=${id}$", {"id": kb_id})
+    await sor.sqlExe("DELETE FROM rag_knowledge_bases WHERE id=${id}$", {"id": kb_id})
 
 # Physical files — paths are like /44/126/174/61/file.mp4
 for d in docs:

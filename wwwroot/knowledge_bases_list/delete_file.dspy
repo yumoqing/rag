@@ -12,7 +12,7 @@ userorgid = await env.get_userorgid()
 
 async with get_sor_context(env, 'rag') as sor:
     recs = await sor.sqlExe(
-        "SELECT file_path, file_size, kb_id FROM documents WHERE id=${id}$",
+        "SELECT file_path, file_size, kb_id FROM rag_documents WHERE id=${id}$",
         {"id": doc_id})
     if not recs:
         return json.dumps({"status": "error", "error": "file not found"}, ensure_ascii=False)
@@ -21,12 +21,12 @@ async with get_sor_context(env, 'rag') as sor:
     file_size = doc.file_size
 
     # Delete document + chunks
-    await sor.sqlExe("DELETE FROM document_chunks WHERE doc_id=${doc_id}$", {"doc_id": doc_id})
-    await sor.sqlExe("DELETE FROM documents WHERE id=${id}$", {"id": doc_id})
+    await sor.sqlExe("DELETE FROM rag_document_chunks WHERE doc_id=${doc_id}$", {"doc_id": doc_id})
+    await sor.sqlExe("DELETE FROM rag_documents WHERE id=${id}$", {"id": doc_id})
 
     # Update KB stats
     await sor.sqlExe(
-        "UPDATE knowledge_bases SET doc_count=GREATEST(doc_count-1, 0), total_size=GREATEST(total_size-${size}$, 0) WHERE id=${kb_id}$",
+        "UPDATE rag_knowledge_bases SET doc_count=GREATEST(doc_count-1, 0), total_size=GREATEST(total_size-${size}$, 0) WHERE id=${kb_id}$",
         {"size": file_size, "kb_id": kb_id})
 
 # Delete physical file via env.realpath
@@ -45,11 +45,11 @@ rows = []
 async with db.sqlorContext(dbname) as sor:
     if folder_id and folder_id != '__root__':
         recs = await sor.sqlExe(
-            "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND folder_id=${folder_id}$ ORDER BY created_at DESC",
+            "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM rag_documents WHERE kb_id=${kb_id}$ AND folder_id=${folder_id}$ ORDER BY created_at DESC",
             {"kb_id": kb_id, "folder_id": folder_id})
     else:
         recs = await sor.sqlExe(
-            "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM documents WHERE kb_id=${kb_id}$ AND (folder_id IS NULL OR folder_id='') ORDER BY created_at DESC",
+            "SELECT id, file_name, file_type, file_size, file_path, status, chunk_count, created_at FROM rag_documents WHERE kb_id=${kb_id}$ AND (folder_id IS NULL OR folder_id='') ORDER BY created_at DESC",
             {"kb_id": kb_id})
     for r in recs:
         rows.append({

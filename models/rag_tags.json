@@ -1,0 +1,73 @@
+{
+    "summary": [
+        {
+            "name": "rag_tags",
+            "title": "标签",
+            "primary": [
+                "id"
+            ]
+        }
+    ],
+    "fields": [
+        {
+            "name": "id",
+            "title": "ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "kb_id",
+            "title": "知识库ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "name",
+            "title": "标签名",
+            "type": "str",
+            "length": 64,
+            "nullable": "no"
+        },
+        {
+            "name": "color",
+            "title": "颜色",
+            "type": "str",
+            "length": 16,
+            "nullable": "no",
+            "default": "#3b82f6"
+        },
+        {
+            "name": "org_id",
+            "title": "所属机构",
+            "type": "str",
+            "length": 32,
+            "nullable": "no",
+            "default": ""
+        },
+        {
+            "name": "created_at",
+            "title": "创建时间",
+            "type": "datetime",
+            "nullable": "yes"
+        }
+    ],
+    "indexes": [
+        {
+            "name": "idx_tag_name",
+            "idxtype": "unique",
+            "idxfields": [
+                "kb_id",
+                "name"
+            ]
+        },
+        {
+            "name": "idx_tag_kb",
+            "idxtype": "index",
+            "idxfields": [
+                "kb_id"
+            ]
+        }
+    ]
+}

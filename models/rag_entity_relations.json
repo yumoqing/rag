@@ -1,0 +1,103 @@
+{
+    "summary": [
+        {
+            "name": "rag_entity_relations",
+            "title": "实体关系",
+            "primary": [
+                "id"
+            ]
+        }
+    ],
+    "fields": [
+        {
+            "name": "id",
+            "title": "ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "kb_id",
+            "title": "知识库ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "yes"
+        },
+        {
+            "name": "subject_id",
+            "title": "主体实体ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "yes"
+        },
+        {
+            "name": "object_id",
+            "title": "客体实体ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "yes"
+        },
+        {
+            "name": "relation_type",
+            "title": "关系类型",
+            "type": "str",
+            "length": 64,
+            "nullable": "yes"
+        },
+        {
+            "name": "description",
+            "title": "关系描述",
+            "type": "text",
+            "nullable": "yes"
+        },
+        {
+            "name": "graph_edge_id",
+            "title": "图边ID",
+            "type": "str",
+            "length": 128,
+            "nullable": "yes"
+        },
+        {
+            "name": "source_chunk_ids",
+            "title": "来源分片ID列表",
+            "type": "text",
+            "nullable": "yes"
+        },
+        {
+            "name": "org_id",
+            "title": "所属机构",
+            "type": "str",
+            "length": 32,
+            "nullable": "yes"
+        },
+        {
+            "name": "created_at",
+            "title": "创建时间",
+            "type": "datetime",
+            "nullable": "yes"
+        }
+    ],
+    "indexes": [
+        {
+            "name": "idx_rel_kb",
+            "idxtype": "index",
+            "idxfields": [
+                "kb_id"
+            ]
+        },
+        {
+            "name": "idx_rel_subject",
+            "idxtype": "index",
+            "idxfields": [
+                "subject_id"
+            ]
+        },
+        {
+            "name": "idx_rel_object",
+            "idxtype": "index",
+            "idxfields": [
+                "object_id"
+            ]
+        }
+    ]
+}

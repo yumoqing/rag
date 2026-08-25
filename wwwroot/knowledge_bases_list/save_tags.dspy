@@ -22,18 +22,18 @@ else:
         added = 0; removed = 0
         async with get_sor_context(env, 'rag') as sor:
             recs = await sor.sqlExe(
-                "SELECT id, tag_id FROM media_tags WHERE media_type='document' AND media_id=${mid}$",
+                "SELECT id, tag_id FROM rag_media_tags WHERE media_type='document' AND media_id=${mid}$",
                 {"mid": doc_id})
             current = {r.tag_id: r.id for r in recs}
             for tid, mt_id in list(current.items()):
                 if tid not in wanted_ids:
-                    await sor.sqlExe("DELETE FROM media_tags WHERE id=${id}$", {"id": mt_id})
+                    await sor.sqlExe("DELETE FROM rag_media_tags WHERE id=${id}$", {"id": mt_id})
                     removed += 1
             for tid in wanted_ids:
                 if tid not in current:
                     mt_id = uuid()
                     await sor.sqlExe(
-                        "INSERT INTO media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
+                        "INSERT INTO rag_media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                         "VALUES (${id}$, ${kb_id}$, 'document', ${mid}$, ${tid}$, NOW())",
                         {"id": mt_id, "kb_id": kb_id, "mid": doc_id, "tid": tid})
                     added += 1

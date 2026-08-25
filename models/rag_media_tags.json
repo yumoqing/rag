@@ -1,0 +1,87 @@
+{
+    "summary": [
+        {
+            "name": "rag_media_tags",
+            "title": "媒体标签关联",
+            "primary": [
+                "id"
+            ]
+        }
+    ],
+    "fields": [
+        {
+            "name": "id",
+            "title": "ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "kb_id",
+            "title": "知识库ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "media_type",
+            "title": "媒体类型",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "media_id",
+            "title": "媒体ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "tag_id",
+            "title": "标签ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "created_at",
+            "title": "创建时间",
+            "type": "datetime",
+            "nullable": "yes"
+        }
+    ],
+    "indexes": [
+        {
+            "name": "idx_mt_unique",
+            "idxtype": "unique",
+            "idxfields": [
+                "media_type",
+                "media_id",
+                "tag_id"
+            ]
+        },
+        {
+            "name": "idx_mt_media",
+            "idxtype": "index",
+            "idxfields": [
+                "media_type",
+                "media_id"
+            ]
+        },
+        {
+            "name": "idx_mt_tag",
+            "idxtype": "index",
+            "idxfields": [
+                "tag_id"
+            ]
+        },
+        {
+            "name": "idx_mt_kb",
+            "idxtype": "index",
+            "idxfields": [
+                "kb_id"
+            ]
+        }
+    ]
+}

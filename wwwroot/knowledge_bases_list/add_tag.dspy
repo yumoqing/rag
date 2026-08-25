@@ -9,7 +9,7 @@ if not doc_id or not tag:
 
 async with get_sor_context(env, 'rag') as sor:
     # Get existing tags
-    recs = await sor.sqlExe("SELECT metadata FROM documents WHERE id=${id}$ AND kb_id=${kb_id}$",
+    recs = await sor.sqlExe("SELECT metadata FROM rag_documents WHERE id=${id}$ AND kb_id=${kb_id}$",
                              {"id": doc_id, "kb_id": kb_id})
     if not recs:
         return json.dumps({"status": "error", "error": "document not found"}, ensure_ascii=False)
@@ -29,7 +29,7 @@ async with get_sor_context(env, 'rag') as sor:
         tags.append(tag)
         meta['tags'] = tags
         await sor.sqlExe(
-            "UPDATE documents SET metadata=${meta}$ WHERE id=${id}$",
+            "UPDATE rag_documents SET metadata=${meta}$ WHERE id=${id}$",
             {"meta": _json.dumps(meta, ensure_ascii=False), "id": doc_id})
         return _json.dumps({"status": "SUCCEEDED", "tags": tags, "added": tag}, ensure_ascii=False)
     else:

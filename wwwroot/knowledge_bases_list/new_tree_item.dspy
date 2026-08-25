@@ -7,7 +7,7 @@ async with db.sqlorContext(dbname) as sor:
     parent_id = ns.get("parentid", "")
     kb_id = ns.get("kb_id", "")
     await sor.sqlExe(
-        "INSERT INTO document_chunks (id, doc_id, kb_id, chunk_index, chunk_type, content, description, created_at) "
+        "INSERT INTO rag_document_chunks (id, doc_id, kb_id, chunk_index, chunk_type, content, description, created_at) "
         "VALUES (${id}$, '', ${kb_id}$, 0, 'directory', ${name}$, ${parentid}$, NOW())",
         {"id": dir_id, "kb_id": kb_id, "name": name, "parentid": parent_id})
     return {"widgettype": "Message", "options": {"user_data": {"id": dir_id, "label": name, "parentid": parent_id}}}

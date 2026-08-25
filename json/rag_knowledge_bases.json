@@ -1,0 +1,70 @@
+{
+    "tblname": "rag_knowledge_bases",
+    "params": {
+        "title": "知识库管理",
+        "browserfields": [
+            {
+                "field": "name",
+                "title": "名称",
+                "width": "20%"
+            },
+            {
+                "field": "description",
+                "title": "描述",
+                "width": "30%"
+            },
+            {
+                "field": "doc_count",
+                "title": "文档数",
+                "width": "10%"
+            },
+            {
+                "field": "total_size",
+                "title": "大小",
+                "width": "10%"
+            },
+            {
+                "field": "embedding_engine",
+                "title": "向量引擎",
+                "width": "15%"
+            },
+            {
+                "field": "created_at",
+                "title": "创建时间",
+                "width": "15%"
+            }
+        ],
+        "editfields": [
+            {
+                "field": "name",
+                "uitype": "Text",
+                "required": true
+            },
+            {
+                "field": "description",
+                "uitype": "Text"
+            },
+            {
+                "field": "embedding_engine",
+                "uitype": "Text",
+                "default": "clip-vith14"
+            },
+            {
+                "field": "vdb_collection",
+                "uitype": "Text"
+            },
+            {
+                "field": "graph_name",
+                "uitype": "Text"
+            }
+        ],
+        "searchfields": [
+            "name",
+            "description"
+        ],
+        "sort": "created_at desc",
+        "data_filter": {
+            "org_id": "{{userorgid}}"
+        }
+    }
+}

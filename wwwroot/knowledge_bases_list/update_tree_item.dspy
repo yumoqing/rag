@@ -4,7 +4,7 @@ dbname = get_module_dbname('rag')
 async with db.sqlorContext(dbname) as sor:
     id = ns.get("id", "")
     name = ns.get("name", "")
-    await sor.sqlExe("UPDATE document_chunks SET content=${name}$ WHERE id=${id}$",
+    await sor.sqlExe("UPDATE rag_document_chunks SET content=${name}$ WHERE id=${id}$",
                      {"name": name, "id": id})
     return {"widgettype": "Message", "options": {"user_data": {"id": id, "label": name}}}
 return {"error": "failed"}

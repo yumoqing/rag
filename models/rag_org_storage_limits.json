@@ -1,0 +1,39 @@
+{
+    "summary": [
+        {
+            "name": "rag_org_storage_limits",
+            "title": "机构存储限额",
+            "primary": [
+                "org_id"
+            ]
+        }
+    ],
+    "fields": [
+        {
+            "name": "org_id",
+            "title": "机构ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "limit_bytes",
+            "title": "限额(字节)",
+            "type": "bigint",
+            "nullable": "no",
+            "default": "104857600"
+        },
+        {
+            "name": "created_at",
+            "title": "创建时间",
+            "type": "datetime",
+            "nullable": "yes"
+        },
+        {
+            "name": "updated_at",
+            "title": "更新时间",
+            "type": "datetime",
+            "nullable": "yes"
+        }
+    ]
+}

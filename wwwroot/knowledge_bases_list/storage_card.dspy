@@ -2,7 +2,7 @@ ns = params_kw.copy()
 env = request._run_ns
 
 async with get_sor_context(env, 'rag') as sor:
-    rec = await sor.sqlExe("SELECT COALESCE(SUM(total_size),0) used FROM knowledge_bases", {})
+    rec = await sor.sqlExe("SELECT COALESCE(SUM(total_size),0) used FROM rag_knowledge_bases", {})
     used_bytes = int(rec[0].used) if rec else 0
 
 used_mb = round(used_bytes / 1048576, 1)

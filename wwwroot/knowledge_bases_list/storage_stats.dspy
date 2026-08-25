@@ -9,13 +9,13 @@ docs = 0
 async with get_sor_context(env, 'rag') as sor:
     rec = await sor.sqlExe(
         "SELECT COALESCE(SUM(d.file_size),0) AS used, COUNT(*) AS docs "
-        "FROM documents d JOIN knowledge_bases k ON d.kb_id=k.id "
+        "FROM rag_documents d JOIN rag_knowledge_bases k ON d.kb_id=k.id "
         "WHERE k.org_id=${org_id}$",
         {"org_id": userorgid})
     if rec:
         used = int(rec[0].used)
         docs = int(rec[0].docs)
-    lim = await sor.sqlExe("SELECT limit_bytes FROM org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
+    lim = await sor.sqlExe("SELECT limit_bytes FROM rag_org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
     if lim:
         limit = int(lim[0].limit_bytes)
 

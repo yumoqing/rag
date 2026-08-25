@@ -1,0 +1,124 @@
+{
+    "summary": [
+        {
+            "name": "rag_knowledge_bases",
+            "title": "知识库",
+            "primary": [
+                "id"
+            ]
+        }
+    ],
+    "fields": [
+        {
+            "name": "id",
+            "title": "ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "name",
+            "title": "名称",
+            "type": "str",
+            "length": 100,
+            "nullable": "yes"
+        },
+        {
+            "name": "description",
+            "title": "描述",
+            "type": "text",
+            "nullable": "yes"
+        },
+        {
+            "name": "org_id",
+            "title": "所属机构",
+            "type": "str",
+            "length": 32,
+            "nullable": "yes"
+        },
+        {
+            "name": "embedding_engine",
+            "title": "向量化引擎",
+            "type": "str",
+            "length": 64,
+            "nullable": "yes",
+            "default": "clip-vith14"
+        },
+        {
+            "name": "vdb_collection",
+            "title": "向量库集合名",
+            "type": "str",
+            "length": 128,
+            "nullable": "yes"
+        },
+        {
+            "name": "graph_name",
+            "title": "图名称",
+            "type": "str",
+            "length": 128,
+            "nullable": "yes"
+        },
+        {
+            "name": "doc_count",
+            "title": "文档数",
+            "type": "int",
+            "nullable": "yes"
+        },
+        {
+            "name": "chunk_count",
+            "title": "分片数",
+            "type": "int",
+            "nullable": "yes"
+        },
+        {
+            "name": "total_size",
+            "title": "总大小(字节)",
+            "type": "int",
+            "nullable": "yes"
+        },
+        {
+            "name": "status",
+            "title": "状态",
+            "type": "str",
+            "length": 16,
+            "nullable": "yes",
+            "default": "active"
+        },
+        {
+            "name": "created_by",
+            "title": "创建人",
+            "type": "str",
+            "length": 32,
+            "nullable": "yes"
+        },
+        {
+            "name": "created_at",
+            "title": "创建时间",
+            "type": "datetime",
+            "nullable": "yes"
+        },
+        {
+            "name": "updated_at",
+            "title": "更新时间",
+            "type": "datetime",
+            "nullable": "yes"
+        }
+    ],
+    "indexes": [
+        {
+            "name": "idx_kb_name",
+            "idxtype": "unique",
+            "idxfields": [
+                "org_id",
+                "name"
+            ]
+        },
+        {
+            "name": "idx_kb_org",
+            "idxtype": "index",
+            "idxfields": [
+                "org_id"
+            ]
+        }
+    ]
+}

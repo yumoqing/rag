@@ -185,19 +185,19 @@ async def process_upload(env, file_data, kb_id, folder_id, file_name):
     from sqlor.dbpools import get_sor_context
     async with get_sor_context(env, 'rag') as sor:
         await sor.sqlExe(
-            "INSERT INTO documents (id, kb_id, folder_id, file_name, file_type, file_size, file_path, mime_type, status, metadata, org_id, created_at, updated_at) "
+            "INSERT INTO rag_documents (id, kb_id, folder_id, file_name, file_type, file_size, file_path, mime_type, status, metadata, org_id, created_at, updated_at) "
             "VALUES (" + "${id}$, ${kb_id}$, ${folder_id}$, ${file_name}$, 'other', ${file_size}$, ${file_path}$, 'application/octet-stream', ${status}$, ${meta}$, ${org_id}$, NOW(), NOW())",
             {"id": doc_id, "kb_id": kb_id, "folder_id": folder_id, "file_name": file_name,
              "file_size": file_size, "file_path": "/idfile/files/" + saved_name,
              "status": status, "meta": meta, "org_id": userorgid})
         await sor.sqlExe(
-            "UPDATE knowledge_bases SET doc_count=doc_count+1, total_size=total_size+" + "${size}$ WHERE id=${kb_id}$",
+            "UPDATE rag_knowledge_bases SET doc_count=doc_count+1, total_size=total_size+" + "${size}$ WHERE id=${kb_id}$",
             {"size": file_size, "kb_id": kb_id})
         if ingest_result and status == 'done':
             chunks_n = ingest_result.get('chunks', 0) if isinstance(ingest_result, dict) else 0
             if chunks_n:
-                await sor.sqlExe("UPDATE documents SET chunk_count=${chunks}$ WHERE id=${id}$", {"chunks": chunks_n, "id": doc_id})
-                await sor.sqlExe("UPDATE knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$", {"n": chunks_n, "kb_id": kb_id})
+                await sor.sqlExe("UPDATE rag_documents SET chunk_count=${chunks}$ WHERE id=${id}$", {"chunks": chunks_n, "id": doc_id})
+                await sor.sqlExe("UPDATE rag_knowledge_bases SET chunk_count=chunk_count+${n}$ WHERE id=${kb_id}$", {"n": chunks_n, "kb_id": kb_id})
 
     faces_n = face_result.get('faces', 0) if face_result and isinstance(face_result, dict) else 0
     speakers_n = voice_result.get('speakers', 0) if voice_result and isinstance(voice_result, dict) else 0
