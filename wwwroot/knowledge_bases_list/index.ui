@@ -66,8 +66,9 @@
                                         "auto_dismiss": false,
                                         "dismiss_events": ["cancel", "submited"],
                                         "movable": true,
+                                        "archor": "cc",
                                         "width": "34%",
-                                        "height": "auto"
+                                        "height": "60%"
                                     },
                                     "options": {
                                         "url": "{{entire_url('./new_kb_form.ui')}}"
