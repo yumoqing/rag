@@ -75,7 +75,7 @@ hits = []
 raw_rows = []
 kw_rows = []
 
-# 读知识库向量引擎，决定用文本(bge-m3 /txte)还是多媒体(CLIP /mme) embedding
+# 读知识库向量引擎：bge-m3(在线文本) / qwen3-vl-embedding(在线多模态) / clip-vith14(GPU本地)
 emb_engine = 'clip-vith14'
 try:
     async with get_sor_context(env, 'rag') as sor:
@@ -83,6 +83,7 @@ try:
         if krecs:
             emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
 except: pass
+is_vl = emb_engine == 'qwen3-vl-embedding'
 if emb_engine == 'bge-m3':
     emb_url = 'https://embedding.opencomputing.net:10443/txte/api/embed'
     emb_model = 'bge-m3'
@@ -90,25 +91,47 @@ else:
     emb_url = 'https://embedding.opencomputing.net:10443/mme/api/embed'
     emb_model = 'CLIP-ViT-H-14'
 
+# VDB 服务地址：读 upapp.rag-vdb（生产已切内网），不硬编码
+try:
+    async with get_sor_context(env, 'rag') as sor:
+        _u = await sor.sqlExe("SELECT baseurl FROM upapp WHERE id='rag-vdb'", {})
+    VDB_BASE = (_u[0].baseurl or '').rstrip('/') if _u else 'https://vectordb.opencomputing.net:10443'
+except:
+    VDB_BASE = 'https://vectordb.opencomputing.net:10443'
+
 if query:
-    # 1. Embed
+    # 1. Embed（在线：vl原生 / bge-m3兼容；GPU：CLIP /mme）
     vec = []
-    try:
-        client = StreamHttpClient()
-        resp = await client.request('POST', emb_url,
-            json={"texts": [query], "model": emb_model})
-        emb = json.loads(resp)
-        vec = emb.get("text_embeddings", emb.get("embeddings", [[]]))[0]
-    except:
-        pass
+    if is_vl:
+        try:
+            from rag.vl_online import vl_embed_contents
+            vec = await vl_embed_contents([{"text": query}]) or []
+        except:
+            vec = []
+    elif emb_engine == 'bge-m3':
+        try:
+            from rag.init import _online_embed
+            _vs = await _online_embed(env, [query])
+            vec = _vs[0] if _vs else []
+        except:
+            vec = []
+    else:
+        try:
+            client = StreamHttpClient()
+            resp = await client.request('POST', emb_url,
+                json={"texts": [query], "model": emb_model})
+            emb = json.loads(resp)
+            vec = emb.get("text_embeddings", emb.get("embeddings", [[]]))[0]
+        except:
+            pass
     if not vec:
-        return json.dumps({"widgettype": "Text", "options": {"text": "向量化失败", "cfontsize": 14, "color": "#e74c3c"}}, ensure_ascii=False)
+        return json.dumps({"widgettype": "Text", "options": {"text": "向量化失败（引擎未配置或不可用，请到引擎配置页检查）", "cfontsize": 14, "color": "#e74c3c"}}, ensure_ascii=False)
 
     # 2. VDB search
     try:
         recall_n = top_k * 3
         client2 = StreamHttpClient()
-        resp2 = await client2.request('POST', 'https://vectordb.opencomputing.net:10443/v1/query',
+        resp2 = await client2.request('POST', VDB_BASE + '/v1/query',
             json={"colname": kb_id, "vector": vec, "pagerows": recall_n, "output_fields": ["*"]})
         vdb = json.loads(resp2)
         raw_rows = vdb.get("data", {}).get("rows", [])
@@ -172,7 +195,23 @@ if query:
             hits.append(kr)
             seen.add(kr["id"])
 
-    hits.sort(key=lambda x: x.get("score", 0), reverse=True)
+    # 在线重排（mm_rerank；未配置/失败则保持召回分排序）
+    rr_applied = False
+    try:
+        from rag.vl_online import vl_rerank
+        cand = hits[:top_k * 3]
+        if cand:
+            rr = await vl_rerank(query, [h.get("text", "") for h in cand])
+            if rr and isinstance(rr.get("scores"), list) and len(rr["scores"]) == len(cand):
+                for i, s in enumerate(rr["scores"]):
+                    cand[i]["score"] = s
+                cand.sort(key=lambda x: x.get("score", 0), reverse=True)
+                rr_applied = True
+    except Exception as e:
+        info('[search_result] rerank failed: %s' % e)
+
+    if not rr_applied:
+        hits.sort(key=lambda x: x.get("score", 0), reverse=True)
     hits = hits[:top_k]
 
 else:

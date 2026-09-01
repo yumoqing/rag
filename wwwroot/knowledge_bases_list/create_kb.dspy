@@ -7,10 +7,10 @@ async with db.sqlorContext(dbname) as sor:
     kb_id = uuid()
     name = ns.get("name", "")
     desc = ns.get("description", "")
-    # 向量引擎：clip-vith14=多媒体(CLIP)，bge-m3=文本(bge-m3)。默认 clip-vith14 兼容旧数据
+    # 向量引擎：bge-m3=文本(在线) / qwen3-vl-embedding=多媒体(在线) / clip-vith14=多媒体(GPU本地CLIP)
     emb_type = ns.get("embedding_type", "") or ns.get("embedding_engine", "")
-    if emb_type not in ("bge-m3", "clip-vith14"):
-        emb_type = "clip-vith14"
+    if emb_type not in ("bge-m3", "clip-vith14", "qwen3-vl-embedding"):
+        emb_type = "bge-m3"
     await sor.sqlExe(
         "INSERT INTO rag_knowledge_bases (id, name, description, org_id, embedding_engine, vdb_collection, doc_count, total_size, chunk_count, status, created_at) "
         "VALUES (${id}$, ${name}$, ${desc}$, ${org_id}$, ${emb}$, 'rag_collection', 0, 0, 0, 'active', NOW())",

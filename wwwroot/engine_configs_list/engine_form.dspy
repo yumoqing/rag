@@ -14,6 +14,8 @@ async def get_cfg(t):
 
 emb = await get_cfg("embedding")
 rr = await get_cfg("rerank")
+mm_emb = await get_cfg("mm_embedding")
+mm_rr = await get_cfg("mm_rerank")
 
 def card(title, desc, prefix, cfg):
     shielded = (not cfg["model_id"]) or cfg["status"] != "active"
@@ -56,7 +58,9 @@ def card(title, desc, prefix, cfg):
     }
 
 result = {"widgettype": "VBox", "options": {"width": "100%", "spacing": "16px"}, "subwidgets": [
-    card("🔤 文本向量化（Embedding）", "文本知识库必需。模型留空或停用 = 屏蔽（文档仍入库可浏览，检索不可用）。", "embedding", emb),
-    card("🎯 重排序（Rerank）", "检索结果精排，可选。未配置时按召回分排序。", "rerank", rr)
+    card("🔤 文本向量化（Embedding）", "文本知识库(bge-m3引擎)必需。模型留空或停用 = 屏蔽（文档仍入库可浏览，检索不可用）。", "embedding", emb),
+    card("🎯 文本重排（Rerank）", "文本检索结果精排，可选。未配置时按召回分排序。", "rerank", rr),
+    card("🖼️ 多模态向量化（qwen3-vl）", "多媒体知识库必需（图文跨模态）。支持以文搜图/以图搜文。留空=屏蔽多媒体检索。", "mm_embedding", mm_emb),
+    card("🖼️ 多模态重排（qwen3-vl-rerank）", "多媒体/混合检索精排，可选。未配置时按召回分排序。", "mm_rerank", mm_rr)
 ]}
 return json.dumps(result, ensure_ascii=False)

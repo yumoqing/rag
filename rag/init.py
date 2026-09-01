@@ -41,10 +41,11 @@ async def kb_list_handler(request, params_kw, *args, **kwargs):
                     size_str = f"{total_size/1024:.0f}KB"
                 else:
                     size_str = f"{total_size}B"
-                engine = {'bge-m3': '文本 bge-m3', 'clip-vith14': '多媒体 CLIP', 'CLIP ViT-H-14': '多媒体 CLIP'}.get((r.embedding_engine or '').strip(), (r.embedding_engine or 'CLIP'))
+                engine = {'bge-m3': '文本·在线', 'qwen3-vl-embedding': '多媒体·在线', 'clip-vith14': '多媒体·GPU CLIP', 'CLIP ViT-H-14': '多媒体·GPU CLIP'}.get((r.embedding_engine or '').strip(), (r.embedding_engine or '未配置'))
+                dim = 2560 if (r.embedding_engine or '').strip() == 'qwen3-vl-embedding' else 1024
                 card = {"widgettype":"VBox","options":{"cwidth":16,"cheight":12,"bgcolor":"#f0f7ff","padding":"16px","css":"card clickable","border":"1px solid #d0e4f7"},"subwidgets":[
                     {"widgettype":"Text","options":{"text":"📚 " + str(r.name),"cfontsize":16,"fontWeight":"bold"}},
-                    {"widgettype":"Text","options":{"text":str(engine)+" · 1024维","cfontsize":12,"color":"#888"}},
+                    {"widgettype":"Text","options":{"text":str(engine)+f" · {dim}维","cfontsize":12,"color":"#888"}},
                     {"widgettype":"HBox","options":{"spacing":"12px"},"subwidgets":[
                         {"widgettype":"Text","options":{"text":"📄 "+str(doc_count)+"文档","cfontsize":12,"color":"#666"}},
                         {"widgettype":"Text","options":{"text":"💾 "+size_str,"cfontsize":12,"color":"#666"}}]}],
@@ -992,7 +993,7 @@ async def engine_cfg_get_handler(request, params_kw, *args, **kwargs):
         async with get_sor_context(env, 'rag') as sor:
             recs = await sor.sqlExe(
                 "SELECT engine_type, model_name, endpoint_url, api_key, status FROM rag_engine_configs "
-                "WHERE engine_type IN ('embedding','rerank') ORDER BY engine_type", {})
+                "WHERE engine_type IN ('embedding','rerank','mm_embedding','mm_rerank') ORDER BY engine_type", {})
         rows = []
         for r in recs:
             enc = getattr(r, "api_key", "") or ""
@@ -1010,8 +1011,8 @@ async def engine_cfg_save_handler(request, params_kw, *args, **kwargs):
     env = request._run_ns
     try:
         engine_type = (params_kw.get("engine_type") or "").strip()
-        if engine_type not in ("embedding", "rerank"):
-            return json.dumps({"error": "engine_type must be embedding/rerank"})
+        if engine_type not in ("embedding", "rerank", "mm_embedding", "mm_rerank"):
+            return json.dumps({"error": "engine_type must be embedding/rerank/mm_embedding/mm_rerank"})
         model_id = (params_kw.get("model_id") or "").strip()
         api_base = (params_kw.get("api_base") or "").strip()
         api_key_plain = (params_kw.get("api_key") or "").strip()
@@ -1071,6 +1072,33 @@ async def engine_cfg_test_handler(request, params_kw, *args, **kwargs):
         import aiohttp
         headers = {"Authorization": "Bearer " + api_key_plain, "Content-Type": "application/json"}
         base = api_base.rstrip("/")
+        # 在线多模态：DashScope 原生 API
+        if engine_type == "mm_embedding":
+            if "/api/v1" not in base:
+                base = base + "/api/v1"
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as s:
+                async with s.post(base + "/services/embeddings/multimodal-embedding/multimodal-embedding",
+                                  json={"model": model_id, "input": {"contents": [{"text": "连通性测试"}]}},
+                                  headers=headers) as resp:
+                    data = await resp.json()
+            embs = (data.get("output") or {}).get("embeddings") or []
+            dim = len(embs[0]["embedding"]) if embs and embs[0].get("embedding") else 0
+            if not dim:
+                return json.dumps({"error": str(data)[:200]}, ensure_ascii=False)
+            return json.dumps({"status": "SUCCEEDED", "message": f"mm_embedding OK，维度 {dim}"}, ensure_ascii=False)
+        if engine_type == "mm_rerank":
+            if "/api/v1" not in base:
+                base = base + "/api/v1"
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as s:
+                async with s.post(base + "/services/rerank/text-rerank/text-rerank",
+                                  json={"model": model_id,
+                                        "input": {"query": "测试", "documents": ["甲", "乙"]},
+                                        "parameters": {"top_n": 2}},
+                                  headers=headers) as resp:
+                    data = await resp.json()
+            if not (data.get("output") or {}).get("results"):
+                return json.dumps({"error": str(data)[:200]}, ensure_ascii=False)
+            return json.dumps({"status": "SUCCEEDED", "message": "mm_rerank OK"}, ensure_ascii=False)
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as s:
             if engine_type == "embedding":
                 async with s.post(base + "/embeddings", json={"model": model_id, "input": ["连通性测试"]},

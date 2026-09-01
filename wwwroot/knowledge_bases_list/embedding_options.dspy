@@ -1,5 +1,6 @@
 import json
 return json.dumps([
-    {"value": "clip-vith14", "text": "多媒体（图文音视）"},
-    {"value": "bge-m3", "text": "文本（文档检索）"}
+    {"value": "bge-m3", "text": "文本（在线·文档检索）"},
+    {"value": "qwen3-vl-embedding", "text": "多媒体（在线·图文跨模态）"},
+    {"value": "clip-vith14", "text": "多媒体（GPU本地CLIP·需GPU）"}
 ], ensure_ascii=False)
