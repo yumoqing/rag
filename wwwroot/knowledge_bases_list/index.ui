@@ -75,6 +75,26 @@
                                     }
                                 }
                             ]
+                        },
+                        {
+                            "widgettype": "Button",
+                            "options": {
+                                "label": "⚙️ 引擎配置",
+                                "bgcolor": "#8b5cf6",
+                                "color": "#fff"
+                            },
+                            "binds": [
+                                {
+                                    "wid": "self",
+                                    "event": "click",
+                                    "actiontype": "urlwidget",
+                                    "target": "app.rag_main_content",
+                                    "mode": "replace",
+                                    "options": {
+                                        "url": "{{entire_url('../engine_configs_list/index.ui')}}"
+                                    }
+                                }
+                            ]
                         }
                     ]
                 }
