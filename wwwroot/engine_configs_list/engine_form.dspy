@@ -44,7 +44,7 @@ def card(title, desc, prefix, cfg):
             ]},
             {"widgettype": "Text", "options": {"text": desc, "cfontsize": 12, "color": "#888"}},
             {"widgettype": "HBox", "options": {"spacing": "12px", "wrap": True}, "subwidgets": [
-                {"widgettype": "UiCode", "id": prefix + "_model", "options": {"name": prefix + "_model", "dataurl": "{{entire_url('./engine_options.dspy')}}", "text": "未配置（屏蔽）", "cwidth": 24, "allowempty": True, "value": cfg["model_id"]}},
+                {"widgettype": "UiCode", "id": prefix + "_model", "options": {"name": prefix + "_model", "dataurl": "/rag/engine_configs_list/engine_options.dspy", "text": "未配置（屏蔽）", "cwidth": 24, "allowempty": True, "value": cfg["model_id"]}},
                 {"widgettype": "Input", "id": prefix + "_base", "options": {"label": "API Base", "name": prefix + "_base", "value": cfg["api_base"], "cwidth": 30}},
                 {"widgettype": "Input", "id": prefix + "_key", "options": {"label": "API Key（" + key_hint + "）", "name": prefix + "_key", "type": "password", "cwidth": 24}}
             ]},
