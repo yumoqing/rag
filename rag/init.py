@@ -446,14 +446,14 @@ async def _get_engine_cfg(env, engine_type):
         from appPublic.rc4 import unpassword
         async with get_sor_context(env, 'rag') as sor:
             recs = await sor.sqlExe(
-                "SELECT model_id, api_base, api_key FROM rag_engine_configs "
+                "SELECT model_name, endpoint_url, api_key FROM rag_engine_configs "
                 "WHERE engine_type=${t}$ AND status='active' ORDER BY is_default DESC, priority DESC LIMIT 1",
                 {"t": engine_type})
         if not recs:
             return None
         r = recs[0]
-        model_id = (getattr(r, "model_id", "") or "").strip()
-        api_base = (getattr(r, "api_base", "") or "").strip()
+        model_id = (getattr(r, "model_name", "") or "").strip()
+        api_base = (getattr(r, "endpoint_url", "") or "").strip()
         enc = (getattr(r, "api_key", "") or "").strip()
         if not (model_id and api_base and enc):
             return None
@@ -991,13 +991,13 @@ async def engine_cfg_get_handler(request, params_kw, *args, **kwargs):
     try:
         async with get_sor_context(env, 'rag') as sor:
             recs = await sor.sqlExe(
-                "SELECT engine_type, model_id, api_base, api_key, status FROM rag_engine_configs "
+                "SELECT engine_type, model_name, endpoint_url, api_key, status FROM rag_engine_configs "
                 "WHERE engine_type IN ('embedding','rerank') ORDER BY engine_type", {})
         rows = []
         for r in recs:
             enc = getattr(r, "api_key", "") or ""
-            rows.append({"engine_type": r.engine_type, "model_id": r.model_id or "",
-                         "api_base": r.api_base or "", "status": r.status or "active",
+            rows.append({"engine_type": r.engine_type, "model_id": r.model_name or "",
+                         "api_base": r.endpoint_url or "", "status": r.status or "active",
                          "has_key": bool(enc)})
         return json.dumps({"status": "SUCCEEDED", "rows": rows}, ensure_ascii=False)
     except Exception as e:
@@ -1030,7 +1030,7 @@ async def engine_cfg_save_handler(request, params_kw, *args, **kwargs):
                 else:
                     enc = recs[0].api_key or ""
                 await sor.sqlExe(
-                    "UPDATE rag_engine_configs SET model_id=${m}$, api_base=${b}$, api_key=${k}$, "
+                    "UPDATE rag_engine_configs SET model_name=${m}$, endpoint_url=${b}$, api_key=${k}$, "
                     "status=${s}$, is_default=1, updated_at=NOW() WHERE id=${id}$",
                     {"m": model_id, "b": api_base, "k": enc, "s": status, "id": rid})
             else:

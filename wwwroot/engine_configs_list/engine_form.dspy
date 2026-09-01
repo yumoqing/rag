@@ -4,12 +4,12 @@ env = request._run_ns
 async def get_cfg(t):
     async with get_sor_context(env, 'rag') as sor:
         recs = await sor.sqlExe(
-            "SELECT model_id, api_base, api_key, status FROM rag_engine_configs WHERE engine_type=${t}$ LIMIT 1",
+            "SELECT model_name, endpoint_url, api_key, status FROM rag_engine_configs WHERE engine_type=${t}$ LIMIT 1",
             {"t": t})
     if not recs:
         return {"model_id": "", "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1", "has_key": False, "status": ""}
     r = recs[0]
-    return {"model_id": r.model_id or "", "api_base": r.api_base or "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    return {"model_id": r.model_name or "", "api_base": r.endpoint_url or "https://dashscope.aliyuncs.com/compatible-mode/v1",
             "has_key": bool(r.api_key), "status": r.status or "active"}
 
 emb = await get_cfg("embedding")
