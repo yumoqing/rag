@@ -88,8 +88,15 @@
                                     "wid": "self",
                                     "event": "click",
                                     "actiontype": "urlwidget",
-                                    "target": "app.rag_main_content",
-                                    "mode": "replace",
+                                    "target": "Popup",
+                                    "popup_options": {
+                                        "auto_dismiss": false,
+                                        "dismiss_events": ["cancel"],
+                                        "movable": true,
+                                        "archor": "cc",
+                                        "width": "50%",
+                                        "height": "80%"
+                                    },
                                     "options": {
                                         "url": "{{entire_url('../engine_configs_list/index.ui')}}"
                                     }
