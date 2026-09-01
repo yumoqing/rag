@@ -1,0 +1,2 @@
+from rag.init import engine_cfg_test_handler
+return await engine_cfg_test_handler(request, params_kw)

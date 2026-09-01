@@ -54,6 +54,10 @@ PATHS_LOGINED = [
     # CRUD 管理页
     f"/{MOD}/documents_list/index.ui",
     f"/{MOD}/engine_configs_list/index.ui",
+    f"/{MOD}/engine_configs_list/engine_form.dspy",
+    f"/{MOD}/engine_configs_list/engine_options.dspy",
+    f"/{MOD}/engine_configs_list/engine_save.dspy",
+    f"/{MOD}/engine_configs_list/engine_test.dspy",
     f"/{MOD}/subscriptions_list/index.ui",
 ]
 

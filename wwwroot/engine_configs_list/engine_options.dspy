@@ -1,0 +1,7 @@
+import json
+env = request._run_ns
+async with get_sor_context(env, 'rag') as sor:
+    recs = await sor.sqlExe(
+        "SELECT name, model_id FROM llm WHERE status='active' ORDER BY name", {})
+rows = [{"value": r.model_id, "text": f"{r.name}（{r.model_id}）"} for r in recs]
+return json.dumps(rows, ensure_ascii=False)

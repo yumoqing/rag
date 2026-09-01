@@ -141,18 +141,12 @@ async def search_handler(request, params_kw, *args, **kwargs):
                 seen.add(hid)
                 unique_hits.append(h)
 
-        # Rerank if query text provided
+        # Rerank if query text provided（在线 rerank；未配置则保持召回分排序）
         if query and unique_hits:
-            try:
-                documents = [h.get("text", h.get("content", "")) for h in unique_hits[:recall_k]]
-                rerank_resp = await _call_uapi("rag-reranker", "rerank", {
-                    "query": query,
-                    "documents": documents
-                })
-                reranked = _apply_rerank(unique_hits, rerank_resp)
-                unique_hits = reranked
-            except Exception as e:
-                exception(f"rerank failed: {e}")
+            documents = [h.get("text", h.get("content", "")) for h in unique_hits[:recall_k]]
+            rerank_resp = await _online_rerank(env, query, documents)
+            if rerank_resp:
+                unique_hits = _apply_rerank(unique_hits[:recall_k], rerank_resp)
 
         # Limit + enrich with DB metadata
         final = unique_hits[:top_k]
@@ -215,28 +209,8 @@ async def _build_search_vector(query, file_data, file_name, env=None, kb_id=''):
         return None
 
     combined = " ".join(texts)
-    try:
-        emb_engine = 'clip-vith14'
-        if env is not None and kb_id:
-            async with get_sor_context(env, 'rag') as sor:
-                krecs = await sor.sqlExe("SELECT embedding_engine FROM rag_knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
-                if krecs:
-                    emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
-        if emb_engine == 'bge-m3':
-            emb_url = 'https://embedding.opencomputing.net:10443/txte/api/embed'
-            emb_model = 'bge-m3'
-        else:
-            emb_url = 'https://embedding.opencomputing.net:10443/mme/api/embed'
-            emb_model = 'CLIP-ViT-H-14'
-        import aiohttp
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
-            async with s.post(emb_url, json={"texts": [combined], "model": emb_model}) as resp:
-                emb_resp = await resp.json()
-        vecs = emb_resp.get("text_embeddings", emb_resp.get("embeddings", [])) if isinstance(emb_resp, dict) else []
-        return vecs[0] if vecs else None
-    except Exception as e:
-        exception(f"query embedding failed: {e}")
-        return None
+    vecs = await _online_embed(env, [combined])
+    return vecs[0] if vecs else None
 
 
 def _parse_vdb_hits(vdb_resp, kb_id):
@@ -465,8 +439,88 @@ def _detect_file_type(name, mime):
     return "other"
 
 
+async def _get_engine_cfg(env, engine_type):
+    """读 rag_engine_configs 的在线引擎配置（embedding/rerank）。
+    返回 dict(model_id, api_base, api_key 明文) 或 None（未配置→能力屏蔽）。"""
+    try:
+        from appPublic.rc4 import unpassword
+        async with get_sor_context(env, 'rag') as sor:
+            recs = await sor.sqlExe(
+                "SELECT model_id, api_base, api_key FROM rag_engine_configs "
+                "WHERE engine_type=${t}$ AND status='active' ORDER BY is_default DESC, priority DESC LIMIT 1",
+                {"t": engine_type})
+        if not recs:
+            return None
+        r = recs[0]
+        model_id = (getattr(r, "model_id", "") or "").strip()
+        api_base = (getattr(r, "api_base", "") or "").strip()
+        enc = (getattr(r, "api_key", "") or "").strip()
+        if not (model_id and api_base and enc):
+            return None
+        try:
+            from appPublic.jsonConfig import getConfig
+            key = getConfig().password_key or 'QRIVSRHrthhwyjy176556332'
+            api_key = unpassword(enc, key)
+        except Exception:
+            api_key = enc
+        return {"model_id": model_id, "api_base": api_base.rstrip("/"), "api_key": api_key}
+    except Exception as e:
+        exception(f"engine cfg read failed ({engine_type}): {e}")
+        return None
+
+
+async def _online_embed(env, texts):
+    """阿里在线 embedding（OpenAI 兼容 /embeddings）。未配置或失败返回 []。"""
+    cfg = await _get_engine_cfg(env, "embedding")
+    if not cfg:
+        return []
+    import aiohttp
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as s:
+            async with s.post(cfg["api_base"] + "/embeddings",
+                              json={"model": cfg["model_id"], "input": texts},
+                              headers={"Authorization": "Bearer " + cfg["api_key"],
+                                       "Content-Type": "application/json"}) as resp:
+                data = await resp.json()
+        items = data.get("data", []) if isinstance(data, dict) else []
+        return [it.get("embedding") for it in items if it.get("embedding")]
+    except Exception as e:
+        exception(f"online embed failed: {e}")
+        return []
+
+
+async def _online_rerank(env, query, documents):
+    """阿里在线 rerank（dashscope compatible-api /reranks）。未配置或失败返回 None。"""
+    cfg = await _get_engine_cfg(env, "rerank")
+    if not cfg:
+        return None
+    import aiohttp
+    base = cfg["api_base"]
+    if "compatible-mode" in base:
+        base = base.replace("compatible-mode", "compatible-api")
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
+            async with s.post(base + "/reranks",
+                              json={"model": cfg["model_id"], "query": query,
+                                    "documents": documents, "top_n": len(documents)},
+                              headers={"Authorization": "Bearer " + cfg["api_key"],
+                                       "Content-Type": "application/json"}) as resp:
+                data = await resp.json()
+        results = data.get("results", []) if isinstance(data, dict) else []
+        # dashscope 返回 [{index, relevance_score}]，转成与 hits 对齐的 scores 列表
+        scores = [0.0] * len(documents)
+        for it in results:
+            idx = it.get("index")
+            if isinstance(idx, int) and 0 <= idx < len(scores):
+                scores[idx] = it.get("relevance_score", 0)
+        return {"scores": scores}
+    except Exception as e:
+        exception(f"online rerank failed: {e}")
+        return None
+
+
 async def _call_uapi(upappid, apiname, data, timeout=10):
-    """Call GPU service via uapi config in rag database"""
+    """Call service via uapi config (VDB 等)"""
     import aiohttp
     env = ServerEnv()
     async with get_sor_context(env, 'rag') as sor:
@@ -492,31 +546,14 @@ async def _rag_ingest_async(env, text, kb_id, doc_id):
         return {"chunks": 0}
     chunk_count = len(chunks)
 
-    # 1. Embedding（按知识库向量引擎选文本/多模态端点）
-    try:
-        emb_engine = 'clip-vith14'
-        async with get_sor_context(env, 'rag') as sor:
-            krecs = await sor.sqlExe("SELECT embedding_engine FROM rag_knowledge_bases WHERE id=${kb_id}$", {"kb_id": kb_id})
-            if krecs:
-                emb_engine = (getattr(krecs[0], 'embedding_engine', '') or 'clip-vith14').strip()
-        if emb_engine == 'bge-m3':
-            emb_url = 'https://embedding.opencomputing.net:10443/txte/api/embed'
-            emb_model = 'bge-m3'
-        else:
-            emb_url = 'https://embedding.opencomputing.net:10443/mme/api/embed'
-            emb_model = 'CLIP-ViT-H-14'
-        import aiohttp
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as s:
-            async with s.post(emb_url, json={"texts": chunks, "model": emb_model}) as resp:
-                emb_resp = await resp.json()
-        embeddings = emb_resp.get("text_embeddings", emb_resp.get("embeddings", [])) if isinstance(emb_resp, dict) else []
-    except Exception as e:
-        exception(f"embedding failed: {e}")
-        embeddings = []
+    # 1. Embedding（在线模型；未配置则屏蔽 → 空向量，文档仍入库可浏览）
+    embeddings = await _online_embed(env, chunks)
 
     # 2. VDB upsert
     vector_ids = []
     if embeddings:
+        if len(embeddings) != len(chunks):
+            embeddings = embeddings[:len(chunks)]
         try:
             vdb_data = {
                 "collection": kb_id,
@@ -934,6 +971,131 @@ async def tag_sync_handler(request, params_kw, *args, **kwargs):
         return json.dumps({"error": str(e)})
 
 
+async def engine_options_handler(request, params_kw, *args, **kwargs):
+    """产线平台 llm 表中可用的 embedding/rerank 模型选项（供配置界面下拉）"""
+    env = request._run_ns
+    try:
+        async with get_sor_context(env, 'rag') as sor:
+            recs = await sor.sqlExe(
+                "SELECT id, name, model_id, capabilities FROM llm WHERE status='active' ORDER BY name", {})
+        rows = [{"v": r.model_id, "t": f"{r.name}（{r.model_id}）"} for r in recs]
+        return json.dumps({"status": "SUCCEEDED", "rows": rows}, ensure_ascii=False)
+    except Exception as e:
+        exception(f"engine_options: {e}, {format_exc()}")
+        return json.dumps({"error": str(e)})
+
+
+async def engine_cfg_get_handler(request, params_kw, *args, **kwargs):
+    """读当前 embedding/rerank 引擎配置（api_key 不回显明文）"""
+    env = request._run_ns
+    try:
+        async with get_sor_context(env, 'rag') as sor:
+            recs = await sor.sqlExe(
+                "SELECT engine_type, model_id, api_base, api_key, status FROM rag_engine_configs "
+                "WHERE engine_type IN ('embedding','rerank') ORDER BY engine_type", {})
+        rows = []
+        for r in recs:
+            enc = getattr(r, "api_key", "") or ""
+            rows.append({"engine_type": r.engine_type, "model_id": r.model_id or "",
+                         "api_base": r.api_base or "", "status": r.status or "active",
+                         "has_key": bool(enc)})
+        return json.dumps({"status": "SUCCEEDED", "rows": rows}, ensure_ascii=False)
+    except Exception as e:
+        exception(f"engine_cfg_get: {e}, {format_exc()}")
+        return json.dumps({"error": str(e)})
+
+
+async def engine_cfg_save_handler(request, params_kw, *args, **kwargs):
+    """保存引擎配置。api_key 留空=沿用旧 key；model_id 清空=屏蔽该能力。"""
+    env = request._run_ns
+    try:
+        engine_type = (params_kw.get("engine_type") or "").strip()
+        if engine_type not in ("embedding", "rerank"):
+            return json.dumps({"error": "engine_type must be embedding/rerank"})
+        model_id = (params_kw.get("model_id") or "").strip()
+        api_base = (params_kw.get("api_base") or "").strip()
+        api_key_plain = (params_kw.get("api_key") or "").strip()
+        status = (params_kw.get("status") or "active").strip()
+        async with get_sor_context(env, 'rag') as sor:
+            recs = await sor.sqlExe(
+                "SELECT id, api_key FROM rag_engine_configs WHERE engine_type=${t}$ LIMIT 1",
+                {"t": engine_type})
+            if recs:
+                rid = recs[0].id
+                if api_key_plain:
+                    from appPublic.rc4 import password
+                    from appPublic.jsonConfig import getConfig
+                    key = getConfig().password_key or 'QRIVSRHrthhwyjy176556332'
+                    enc = password(api_key_plain, key=key)
+                else:
+                    enc = recs[0].api_key or ""
+                await sor.sqlExe(
+                    "UPDATE rag_engine_configs SET model_id=${m}$, api_base=${b}$, api_key=${k}$, "
+                    "status=${s}$, is_default=1, updated_at=NOW() WHERE id=${id}$",
+                    {"m": model_id, "b": api_base, "k": enc, "s": status, "id": rid})
+            else:
+                from appPublic.rc4 import password
+                from appPublic.jsonConfig import getConfig
+                key = getConfig().password_key or 'QRIVSRHrthhwyjy176556332'
+                enc = password(api_key_plain, key=key) if api_key_plain else ""
+                rid = uuid.uuid4().hex
+                await sor.sqlExe(
+                    "INSERT INTO rag_engine_configs (id, engine_type, engine_name, endpoint_url, api_key, "
+                    "model_name, is_default, priority, status, created_at, updated_at) "
+                    "VALUES (${id}$, ${t}$, ${n}$, ${b}$, ${k}$, ${m}$, 1, 10, ${s}$, NOW(), NOW())",
+                    {"id": rid, "t": engine_type, "n": engine_type, "b": api_base,
+                     "k": enc, "m": model_id, "s": status})
+        shielded = not model_id or status != "active"
+        return json.dumps({"status": "SUCCEEDED", "shielded": shielded}, ensure_ascii=False)
+    except Exception as e:
+        exception(f"engine_cfg_save: {e}, {format_exc()}")
+        return json.dumps({"error": str(e)})
+
+
+async def engine_cfg_test_handler(request, params_kw, *args, **kwargs):
+    """连通性测试：用提交的 model/base/key（或已存配置）发一次真实调用"""
+    env = request._run_ns
+    try:
+        engine_type = (params_kw.get("engine_type") or "").strip()
+        model_id = (params_kw.get("model_id") or "").strip()
+        api_base = (params_kw.get("api_base") or "").strip()
+        api_key_plain = (params_kw.get("api_key") or "").strip()
+        if not (model_id and api_base):
+            cfg = await _get_engine_cfg(env, engine_type)
+            if not cfg:
+                return json.dumps({"error": "未配置，无法测试"}, ensure_ascii=False)
+            model_id, api_base = cfg["model_id"], cfg["api_base"]
+            api_key_plain = api_key_plain or cfg["api_key"]
+        if not api_key_plain:
+            return json.dumps({"error": "缺少 api_key"}, ensure_ascii=False)
+        import aiohttp
+        headers = {"Authorization": "Bearer " + api_key_plain, "Content-Type": "application/json"}
+        base = api_base.rstrip("/")
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as s:
+            if engine_type == "embedding":
+                async with s.post(base + "/embeddings", json={"model": model_id, "input": ["连通性测试"]},
+                                  headers=headers) as resp:
+                    data = await resp.json()
+                dim = len(data.get("data", [{}])[0].get("embedding", [])) if data.get("data") else 0
+                if not dim:
+                    return json.dumps({"error": str(data)[:200]}, ensure_ascii=False)
+                return json.dumps({"status": "SUCCEEDED", "message": f"embedding OK，维度 {dim}"}, ensure_ascii=False)
+            else:
+                if "compatible-mode" in base:
+                    base = base.replace("compatible-mode", "compatible-api")
+                async with s.post(base + "/reranks",
+                                  json={"model": model_id, "query": "测试",
+                                        "documents": ["甲", "乙"], "top_n": 2},
+                                  headers=headers) as resp:
+                    data = await resp.json()
+                if not data.get("results"):
+                    return json.dumps({"error": str(data)[:200]}, ensure_ascii=False)
+                return json.dumps({"status": "SUCCEEDED", "message": "rerank OK"}, ensure_ascii=False)
+    except Exception as e:
+        exception(f"engine_cfg_test: {e}, {format_exc()}")
+        return json.dumps({"error": str(e)[:200]})
+
+
 def init_rag_module():
     env = ServerEnv()
     rf = RegisterFunction()
@@ -954,3 +1116,7 @@ def init_rag_module():
     rf.register("tag_media_tags", tag_media_tags_handler)
     rf.register("tag_search", tag_search_handler)
     rf.register("tag_sync", tag_sync_handler)
+    rf.register("engine_options", engine_options_handler)
+    rf.register("engine_cfg_get", engine_cfg_get_handler)
+    rf.register("engine_cfg_save", engine_cfg_save_handler)
+    rf.register("engine_cfg_test", engine_cfg_test_handler)

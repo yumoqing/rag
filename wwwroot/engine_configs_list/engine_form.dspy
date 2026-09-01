@@ -1,0 +1,46 @@
+import json
+env = request._run_ns
+
+async def get_cfg(t):
+    async with get_sor_context(env, 'rag') as sor:
+        recs = await sor.sqlExe(
+            "SELECT model_id, api_base, api_key, status FROM rag_engine_configs WHERE engine_type=${t}$ LIMIT 1",
+            {"t": t})
+    if not recs:
+        return {"model_id": "", "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1", "has_key": False, "status": ""}
+    r = recs[0]
+    return {"model_id": r.model_id or "", "api_base": r.api_base or "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "has_key": bool(r.api_key), "status": r.status or "active"}
+
+emb = await get_cfg("embedding")
+rr = await get_cfg("rerank")
+
+def card(title, desc, prefix, cfg):
+    shielded = (not cfg["model_id"]) or cfg["status"] != "active"
+    state = "⛔ 已屏蔽" if shielded else "✅ 启用中"
+    key_hint = "已配置（留空沿用）" if cfg["has_key"] else "未配置"
+    return {
+        "widgettype": "VBox", "options": {"width": "100%", "spacing": "12px", "bgcolor": "#f8f9fa", "padding": "16px", "css": "card"},
+        "subwidgets": [
+            {"widgettype": "HBox", "options": {"spacing": "12px", "alignItems": "center"}, "subwidgets": [
+                {"widgettype": "Text", "options": {"text": title, "cfontsize": 16, "fontWeight": "bold"}},
+                {"widgettype": "Text", "id": prefix + "_state", "options": {"text": state, "cfontsize": 13, "color": "#f56c6c" if shielded else "#50b86c"}}
+            ]},
+            {"widgettype": "Text", "options": {"text": desc, "cfontsize": 12, "color": "#888"}},
+            {"widgettype": "HBox", "options": {"spacing": "12px", "wrap": True}, "subwidgets": [
+                {"widgettype": "UiCode", "id": prefix + "_model", "options": {"name": prefix + "_model", "dataurl": "{{entire_url('./engine_options.dspy')}}", "text": "未配置（屏蔽）", "cwidth": 24, "allowempty": True, "value": cfg["model_id"]}},
+                {"widgettype": "Input", "id": prefix + "_base", "options": {"label": "API Base", "name": prefix + "_base", "value": cfg["api_base"], "cwidth": 30}},
+                {"widgettype": "Input", "id": prefix + "_key", "options": {"label": "API Key（" + key_hint + "）", "name": prefix + "_key", "type": "password", "cwidth": 24}}
+            ]},
+            {"widgettype": "HBox", "options": {"spacing": "12px"}, "subwidgets": [
+                {"widgettype": "Button", "options": {"label": "测试连通", "css": "outline", "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self", "script": "var p=this.parent.parent;var m=bricks.getWidgetById('" + prefix + "_model',p).resultValue()||'';var b=bricks.getWidgetById('" + prefix + "_base',p).resultValue()||'';var k=bricks.getWidgetById('" + prefix + "_key',p).resultValue()||'';fetch('./engine_test.dspy?_webbricks_=1&engine_type=" + prefix + "&model_id='+encodeURIComponent(m)+'&api_base='+encodeURIComponent(b)+'&api_key='+encodeURIComponent(k)).then(function(r){return r.json()}).then(function(d){bricks.show_message({title:'" + title + " 测试',message:d.message||d.error||JSON.stringify(d)})})"}]},
+                {"widgettype": "Button", "options": {"label": "保存", "bgcolor": "#10b981", "color": "#fff", "binds": [{"wid": "self", "event": "click", "actiontype": "script", "target": "self", "script": "var p=this.parent.parent;var m=bricks.getWidgetById('" + prefix + "_model',p).resultValue()||'';var b=bricks.getWidgetById('" + prefix + "_base',p).resultValue()||'';var k=bricks.getWidgetById('" + prefix + "_key',p).resultValue()||'';fetch('./engine_save.dspy?_webbricks_=1&engine_type=" + prefix + "&model_id='+encodeURIComponent(m)+'&api_base='+encodeURIComponent(b)+'&api_key='+encodeURIComponent(k)).then(function(r){return r.json()}).then(function(d){bricks.show_message({title:'保存',message:(d.error||('已保存：'+(d.shielded?'能力屏蔽':'已启用')))+'（刷新页面查看状态）'})})"}]}
+            ]}
+        ]
+    }
+
+result = {"widgettype": "VBox", "options": {"width": "100%", "spacing": "16px"}, "subwidgets": [
+    card("🔤 文本向量化（Embedding）", "文本知识库必需。模型留空或停用 = 屏蔽（文档仍入库可浏览，检索不可用）。", "embedding", emb),
+    card("🎯 重排序（Rerank）", "检索结果精排，可选。未配置时按召回分排序。", "rerank", rr)
+]}
+return json.dumps(result, ensure_ascii=False)
