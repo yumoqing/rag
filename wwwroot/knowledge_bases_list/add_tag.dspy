@@ -4,6 +4,14 @@ tag = ns.get('tag', '').strip()
 kb_id = ns.get('kb_id', '')
 env = request._run_ns
 
+# KB 维护角色校验（机构隔离 + 角色）
+from rag.init import check_kb_perm
+db = DBPools()
+async with db.sqlorContext(get_module_dbname('rag')) as sor:
+    _ok, _kb, _msg = await check_kb_perm(env, sor, kb_id, 'maintain')
+if not _ok:
+    return json.dumps({"status": "error", "error": _msg}, ensure_ascii=False)
+
 if not doc_id or not tag:
     return json.dumps({"status": "error", "error": "doc_id and tag required"}, ensure_ascii=False)
 

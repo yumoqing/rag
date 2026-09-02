@@ -6,6 +6,12 @@ async with db.sqlorContext(dbname) as sor:
     name = ns.get("name", "")
     parent_id = ns.get("parentid", "")
     kb_id = ns.get("kb_id", "")
+    # KB 维护角色校验
+    from rag.init import check_kb_perm
+    env = request._run_ns
+    _ok, _kb, _msg = await check_kb_perm(env, sor, kb_id, 'maintain')
+    if not _ok:
+        return json.dumps({"status": "error", "error": _msg}, ensure_ascii=False)
     await sor.sqlExe(
         "INSERT INTO rag_document_chunks (id, doc_id, kb_id, chunk_index, chunk_type, content, description, created_at) "
         "VALUES (${id}$, '', ${kb_id}$, 0, 'directory', ${name}$, ${parentid}$, NOW())",

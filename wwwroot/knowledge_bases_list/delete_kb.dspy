@@ -7,6 +7,15 @@ if not kb_id:
     return {"widgettype": "urlwidget",
             "options": {"url": entire_url('/rag/knowledge_bases_list/index.ui')}}
 
+# KB 维护角色校验（机构隔离 + 角色）
+from rag.init import check_kb_perm
+env = request._run_ns
+db = DBPools()
+async with db.sqlorContext(get_module_dbname('rag')) as sor:
+    _ok, _kb, _msg = await check_kb_perm(env, sor, kb_id, 'maintain')
+if not _ok:
+    return {"widgettype": "Text", "options": {"text": "⛔ " + _msg, "cfontsize": 13, "color": "#f56c6c", "halign": "center"}}
+
 env = request._run_ns
 userorgid = await env.get_userorgid()
 deleted = {"documents": 0, "chunks": 0, "tags": 0, "media_tags": 0,

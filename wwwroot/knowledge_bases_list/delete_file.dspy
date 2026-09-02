@@ -4,6 +4,15 @@ kb_id = ns.get('kb_id', '')
 folder_id = ns.get('folder_id', '')
 folder_label = ns.get('folder_label', '全部文件')
 
+# KB 维护角色校验（机构隔离 + 角色）
+from rag.init import check_kb_perm
+env = request._run_ns
+db = DBPools()
+async with db.sqlorContext(get_module_dbname('rag')) as sor:
+    _ok, _kb, _msg = await check_kb_perm(env, sor, kb_id, 'maintain')
+if not _ok:
+    return json.dumps({"status": "error", "error": _msg}, ensure_ascii=False)
+
 if not doc_id:
     return json.dumps({"status": "error", "error": "doc_id required"}, ensure_ascii=False)
 

@@ -85,6 +85,22 @@
             "default": "active"
         },
         {
+            "name": "maintain_roles",
+            "title": "维护角色",
+            "type": "str",
+            "length": 500,
+            "nullable": "yes",
+            "default": ""
+        },
+        {
+            "name": "search_roles",
+            "title": "检索角色",
+            "type": "str",
+            "length": 500,
+            "nullable": "yes",
+            "default": ""
+        },
+        {
             "name": "created_by",
             "title": "创建人",
             "type": "str",

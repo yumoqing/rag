@@ -2,6 +2,16 @@ ns = params_kw.copy()
 db = DBPools()
 dbname = get_module_dbname('rag')
 async with db.sqlorContext(dbname) as sor:
-    await sor.sqlExe("DELETE FROM rag_document_chunks WHERE id=${id}$", {"id": ns.get("id","")})
-    return {"widgettype": "Message", "options": {"user_data": {"id": ns.get("id","")}}}
+    _id = ns.get("id", "")
+    # KB 维护角色校验（按节点反查 kb_id）
+    _recs = await sor.sqlExe("SELECT kb_id FROM rag_document_chunks WHERE id=${id}$", {"id": _id})
+    await sor.sqlExe("COMMIT", {})
+    _kb_id = getattr(_recs[0], 'kb_id', '') if _recs else ''
+    from rag.init import check_kb_perm
+    env = request._run_ns
+    _ok, _kb, _msg = await check_kb_perm(env, sor, _kb_id, 'maintain')
+    if not _ok:
+        return json.dumps({"status": "error", "error": _msg}, ensure_ascii=False)
+    await sor.sqlExe("DELETE FROM rag_document_chunks WHERE id=${id}$", {"id": _id})
+    return {"widgettype": "Message", "options": {"user_data": {"id": _id}}}
 return {"error": "failed"}

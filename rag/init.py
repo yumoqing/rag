@@ -165,15 +165,26 @@ async def search_handler(request, params_kw, *args, **kwargs):
 
 
 async def _resolve_search_kbs(env, userorgid, kb_id):
-    """Resolve KB IDs: specific or all org KBs"""
+    """Resolve KB IDs: specific or all org KBs。
+    机构隔离 + 检索角色过滤（search_roles 为空=同机构默认可检）。"""
     async with get_sor_context(env, 'rag') as sor:
         if kb_id:
             recs = await sor.R("rag_knowledge_bases", {"id": kb_id})
-            return [r.id for r in recs]
-        # All org KBs (global + org-specific)
-        sql = "SELECT id FROM rag_knowledge_bases WHERE org_id IS NULL OR org_id=${org_id}$"
-        recs = await sor.sqlExe(sql, {"org_id": userorgid})
-        return [r.id for r in recs]
+            cands = list(recs or [])
+        else:
+            # All org KBs (global + org-specific)
+            sql = "SELECT * FROM rag_knowledge_bases WHERE org_id IS NULL OR org_id=${org_id}$"
+            recs = await sor.sqlExe(sql, {"org_id": userorgid})
+            cands = list(recs or [])
+        user_id = await env.get_user()
+        roles = await _get_user_roles_for(sor, user_id)
+        out = []
+        for r in cands:
+            if str(r.org_id or '') not in ('', str(userorgid or '')):
+                continue  # 跨机构 KB 不可检
+            if _role_match(roles, getattr(r, 'search_roles', '')):
+                out.append(r.id)
+        return out
 
 
 async def _build_search_vector(query, file_data, file_name, env=None, kb_id=''):
@@ -278,6 +289,110 @@ def _fmt_bytes(n):
     return str(round(n/1048576, 1)) + 'MB'
 
 
+# ────────────────────────── 机构 rags 目录 + 容量参数 + KB 角色权限 ──────────────────────────
+# 2026-09-02 需求：
+#  1) 产线平台各机构目录下开设 rags/ 目录，rag 模块创建的知识库文件都存放在该目录
+#     （{workspace_base}/{org_id}/rags/{kb_id}/，workspace_base 与产线工作空间同参数）；
+#  2) 容量检查不独立硬查，由 appbase params 参数 rag_check_storage_quota 控制（默认不检查）；
+#  3) 每个知识库可独立设置维护角色(maintain_roles)/检索角色(search_roles)，
+#     用户实际操作（上传/删除/改名/检索/下载）按角色做权限控制。
+
+_RAGS_BASE_DEFAULT = '/d/pipeline/workspaces'
+
+
+async def _get_param_value(sor, name, default=""):
+    """读 appbase params 表（params_name/params_value），表/行不存在返回 default。"""
+    try:
+        recs = await sor.sqlExe(
+            "SELECT params_value FROM params WHERE params_name=${n}$ LIMIT 1", {"n": name})
+        await sor.sqlExe("COMMIT", {})
+        if recs:
+            v = getattr(recs[0], 'params_value', None)
+            if v is not None and str(v).strip() != '':
+                return str(v)
+    except Exception as e:
+        debug(f"rag _get_param_value({name}) failed: {e}")
+    return default
+
+
+async def get_rags_base(sor):
+    """机构 rags 根目录 = 产线工作空间根（workspace_base 参数）下，与机构目录同级。"""
+    return await _get_param_value(sor, 'workspace_base', _RAGS_BASE_DEFAULT)
+
+
+def kb_dir_for(base, org_id, kb_id):
+    """{base}/{org_id}/rags/{kb_id}。org_id 空兜底 '0'。"""
+    return os.path.join(base, str(org_id or '0'), 'rags', str(kb_id))
+
+
+def ensure_kb_dir(base, org_id, kb_id):
+    """确保知识库目录存在（含机构 rags 父目录），返回绝对路径。"""
+    d = kb_dir_for(base, org_id, kb_id)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+async def _get_user_roles_for(sor, user_id):
+    """查用户 RBAC 角色（{orgtypeid}.{name} 格式，与产线惯例一致）。"""
+    roles = ['any', 'logined']
+    if not user_id:
+        return roles
+    try:
+        recs = await sor.sqlExe(
+            "SELECT r.orgtypeid, r.name FROM userrole ur JOIN role r ON ur.roleid=r.id "
+            "WHERE ur.userid=${u}$", {"u": user_id})
+        await sor.sqlExe("COMMIT", {})
+        for r in (recs or []):
+            o = getattr(r, 'orgtypeid', '') or ''
+            n = getattr(r, 'name', '') or ''
+            if o and n:
+                roles.append(f"{o}.{n}")
+                roles.append(f"{o}.*")
+    except Exception as e:
+        debug(f"rag _get_user_roles_for failed: {e}")
+    return roles
+
+
+def _role_match(user_roles, allowed_csv):
+    """allowed_csv 为空 → 默认放行（同机构登录用户）；'*' → 全部；否则按角色名精确/通配匹配。"""
+    allowed = [x.strip() for x in str(allowed_csv or '').split(',') if x.strip()]
+    if not allowed:
+        return True
+    if '*' in allowed:
+        return True
+    ur = set(user_roles or [])
+    for a in allowed:
+        if a in ur:
+            return True
+        if a.endswith('.*'):
+            prefix = a[:-1]
+            if any(r.startswith(prefix) for r in ur):
+                return True
+    return False
+
+
+async def check_kb_perm(env, sor, kb_id, perm):
+    """KB 级角色权限校验。perm='maintain'|'search'。
+    返回 (ok, kb, msg)。机构隔离：kb 不属于用户机构 → 拒绝。
+    角色为空 → 同机构登录用户默认放行。"""
+    userorgid = await env.get_userorgid()
+    user_id = await env.get_user()
+    recs = await sor.sqlExe(
+        "SELECT * FROM rag_knowledge_bases WHERE id=${k}$ LIMIT 1", {"k": kb_id})
+    await sor.sqlExe("COMMIT", {})
+    if not recs:
+        return False, None, "知识库不存在"
+    kb = recs[0]
+    if str(kb.org_id or '') != str(userorgid or ''):
+        return False, kb, "无权访问其他机构的知识库"
+    allowed = kb.maintain_roles if perm == 'maintain' else kb.search_roles
+    roles = await _get_user_roles_for(sor, user_id)
+    if not _role_match(roles, allowed):
+        label = '维护' if perm == 'maintain' else '检索'
+        return False, kb, f"无{label}权限：该知识库限角色 [{allowed}]，当前角色不匹配"
+    return True, kb, ""
+
+
 async def doc_upload_handler(request, params_kw, *args, **kwargs):
     """文件上传 → 保存 → DB记录 → 触发RAG入库"""
     env = request._run_ns
@@ -296,21 +411,37 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
 
         file_size = len(file_data)
 
-        # ---- ORG STORAGE QUOTA CHECK (per-org limit, not global) ----
-        quota_limit = 104857600
-        used = 0
+        # ---- KB 级维护权限校验（机构隔离 + 角色） ----
         async with get_sor_context(env, 'rag') as sor:
-            rec = await sor.sqlExe("SELECT COALESCE(SUM(file_size),0) AS used FROM rag_documents WHERE org_id=${org_id}$", {"org_id": userorgid})
-            if rec: used = int(rec[0].used)
-            lim = await sor.sqlExe("SELECT limit_bytes FROM rag_org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
-            if lim: quota_limit = int(lim[0].limit_bytes)
-        if used + file_size > quota_limit:
-            return json.dumps({"error": "storage_quota_exceeded",
-                "message": "存储配额超限：机构已用 " + _fmt_bytes(used) + "，限额 " + _fmt_bytes(quota_limit) + "，本文件 " + _fmt_bytes(file_size)}, ensure_ascii=False)
+            ok, kb, msg = await check_kb_perm(env, sor, kb_id, 'maintain')
+        if not ok:
+            return json.dumps({"error": "kb_perm_denied", "message": msg}, ensure_ascii=False)
 
-        # Save file via FileStorage (layered dir layout, returns web path e.g. /191/193/197/97/xxx.txt)
+        # ---- 机构存储容量检查（参数化：rag_check_storage_quota 默认不检查） ----
+        async with get_sor_context(env, 'rag') as sor:
+            check_quota = str(await _get_param_value(sor, 'rag_check_storage_quota', '0')).strip().lower()
+        if check_quota in ('1', 'true', 'yes', 'on'):
+            quota_limit = 104857600
+            used = 0
+            async with get_sor_context(env, 'rag') as sor:
+                rec = await sor.sqlExe("SELECT COALESCE(SUM(file_size),0) AS used FROM rag_documents WHERE org_id=${org_id}$", {"org_id": userorgid})
+                if rec: used = int(rec[0].used)
+                lim = await sor.sqlExe("SELECT limit_bytes FROM rag_org_storage_limits WHERE org_id=${org_id}$", {"org_id": userorgid})
+                if lim: quota_limit = int(lim[0].limit_bytes)
+            if used + file_size > quota_limit:
+                return json.dumps({"error": "storage_quota_exceeded",
+                    "message": "存储配额超限：机构已用 " + _fmt_bytes(used) + "，限额 " + _fmt_bytes(quota_limit) + "，本文件 " + _fmt_bytes(file_size)}, ensure_ascii=False)
+
+        # ---- 保存到机构 rags 目录：{workspace_base}/{org}/rags/{kb}/ ----
         doc_id = uuid.uuid4().hex
-        web_path = await env.save_file(file_data, file_name)
+        async with get_sor_context(env, 'rag') as sor:
+            rags_base = await get_rags_base(sor)
+        kb_dir = ensure_kb_dir(rags_base, userorgid, kb_id)
+        safe_name = (file_name or 'upload.bin').replace('/', '_').replace('\\', '_')
+        disk_name = doc_id[:8] + '_' + safe_name
+        with open(os.path.join(kb_dir, disk_name), 'wb') as f:
+            f.write(file_data)
+        web_path = '/rags/' + str(userorgid or '0') + '/' + str(kb_id) + '/' + disk_name
 
         file_type = _detect_file_type(file_name, "application/octet-stream")
 
@@ -379,6 +510,11 @@ async def doc_delete_handler(request, params_kw, *args, **kwargs):
                 return json.dumps({"error": "document not found"})
             doc = recs[0]
 
+            # KB 级维护权限校验（机构隔离 + 角色）
+            ok, kb, msg = await check_kb_perm(env, sor, doc.kb_id, 'maintain')
+            if not ok:
+                return json.dumps({"error": "kb_perm_denied", "message": msg}, ensure_ascii=False)
+
             # Get chunks to clean VDB
             chunks = await sor.R("rag_document_chunks", {"doc_id": doc_id})
 
@@ -409,9 +545,17 @@ async def doc_delete_handler(request, params_kw, *args, **kwargs):
                 "UPDATE rag_knowledge_bases SET doc_count=GREATEST(doc_count-1,0), total_size=GREATEST(total_size-${size}$,0), chunk_count=GREATEST(chunk_count-${n}$,0) WHERE id=${kb_id}$",
                 {"size": doc.file_size, "n": len(chunks), "kb_id": doc.kb_id})
 
-        # Delete file from disk
+        # Delete file from disk（/rags/{org}/{kb}/{disk} 新布局；旧 /idfile/ 兼容）
         file_path = doc.file_path
-        if file_path and file_path.startswith("/idfile/"):
+        if file_path and file_path.startswith("/rags/"):
+            parts = [p for p in file_path.split('/') if p]
+            if len(parts) >= 4:
+                async with get_sor_context(env, 'rag') as sor:
+                    rags_base = await get_rags_base(sor)
+                real_path = os.path.join(rags_base, parts[1], 'rags', parts[2], parts[3])
+                if os.path.isfile(real_path):
+                    os.remove(real_path)
+        elif file_path and file_path.startswith("/idfile/"):
             real_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files",
                                      os.path.basename(file_path))
             if os.path.exists(real_path):
@@ -421,6 +565,52 @@ async def doc_delete_handler(request, params_kw, *args, **kwargs):
 
     except Exception as e:
         exception(f"doc_delete: {e}, {format_exc()}")
+        return json.dumps({"error": str(e)})
+
+
+async def file_serve_handler(request, params_kw, *args, **kwargs):
+    """知识库文件下载/预览：search 角色校验 + 机构隔离，base64 返回（前端 Blob 下载）。
+    堵住 /idfile/ 猜路径越权：rags 目录文件不暴露给 idfile，只能经此端点取。"""
+    import base64, mimetypes as _mt
+    env = request._run_ns
+    try:
+        doc_id = params_kw.get("doc_id", "")
+        if not doc_id:
+            return json.dumps({"error": "doc_id required"})
+        async with get_sor_context(env, 'rag') as sor:
+            recs = await sor.R("rag_documents", {"id": doc_id})
+            if not recs:
+                return json.dumps({"error": "document not found"})
+            doc = recs[0]
+            ok, kb, msg = await check_kb_perm(env, sor, doc.kb_id, 'search')
+            if not ok:
+                return json.dumps({"error": "kb_perm_denied", "message": msg}, ensure_ascii=False)
+            fp = doc.file_path or ''
+            if fp.startswith('/rags/'):
+                parts = [p for p in fp.split('/') if p]
+                if len(parts) < 4:
+                    return json.dumps({"error": "bad file path"})
+                rags_base = await get_rags_base(sor)
+                real_path = os.path.join(rags_base, parts[1], 'rags', parts[2], parts[3])
+            elif fp.startswith('/idfile/'):
+                real_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "files",
+                                         os.path.basename(fp))
+            else:
+                return json.dumps({"error": "file path not served"})
+            if not os.path.isfile(real_path):
+                return json.dumps({"error": "file missing on disk"})
+            with open(real_path, 'rb') as f:
+                data = f.read()
+        mime = _mt.guess_type(doc.file_name or '')[0] or 'application/octet-stream'
+        return json.dumps({
+            "status": "SUCCEEDED",
+            "file_name": doc.file_name,
+            "mime": mime,
+            "size": len(data),
+            "b64": base64.b64encode(data).decode('ascii')
+        }, ensure_ascii=False)
+    except Exception as e:
+        exception(f"file_serve: {e}, {format_exc()}")
         return json.dumps({"error": str(e)})
 
 
@@ -678,6 +868,10 @@ async def dir_create_handler(request, params_kw, *args, **kwargs):
         if not kb_id or not dir_name:
             return json.dumps({"error": "kb_id and dir_name required"})
         async with get_sor_context(env, 'rag') as sor:
+            # KB 维护角色校验
+            ok, kb, msg = await check_kb_perm(env, sor, kb_id, 'maintain')
+            if not ok:
+                return json.dumps({"error": "kb_perm_denied", "message": msg}, ensure_ascii=False)
             dir_id = uuid.uuid4().hex
             await sor.sqlExe(
                 "INSERT INTO rag_document_chunks (id, doc_id, kb_id, chunk_index, chunk_type, content, description, created_at) "
@@ -697,6 +891,13 @@ async def dir_delete_handler(request, params_kw, *args, **kwargs):
         if not item_id:
             return json.dumps({"error": "item_id required"})
         async with get_sor_context(env, 'rag') as sor:
+            # KB 维护角色校验（按节点反查 kb_id）
+            recs = await sor.sqlExe("SELECT kb_id FROM rag_document_chunks WHERE id=${id}$", {"id": item_id})
+            await sor.sqlExe("COMMIT", {})
+            _kb_id = getattr(recs[0], 'kb_id', '') if recs else ''
+            ok, kb, msg = await check_kb_perm(env, sor, _kb_id, 'maintain')
+            if not ok:
+                return json.dumps({"error": "kb_perm_denied", "message": msg}, ensure_ascii=False)
             await sor.sqlExe("DELETE FROM rag_document_chunks WHERE id=${id}$ OR doc_id=${id}$", {"id": item_id})
             return json.dumps({"status": "SUCCEEDED"})
     except Exception as e:
@@ -1133,6 +1334,7 @@ def init_rag_module():
     rf.register("search", search_handler)
     rf.register("doc_upload", doc_upload_handler)
     rf.register("doc_delete", doc_delete_handler)
+    rf.register("file_serve", file_serve_handler)
     rf.register("dir_create", dir_create_handler)
     rf.register("dir_delete", dir_delete_handler)
     rf.register("dir_list", dir_list_handler)

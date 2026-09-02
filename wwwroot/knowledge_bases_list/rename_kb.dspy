@@ -6,6 +6,15 @@ desc = ns.get('description', '')
 if not kb_id or not name:
     return json.dumps({"status": "error", "error": "kb_id and name required"}, ensure_ascii=False)
 
+# KB 维护角色校验（机构隔离 + 角色）
+from rag.init import check_kb_perm
+env = request._run_ns
+db = DBPools()
+async with db.sqlorContext(get_module_dbname('rag')) as sor:
+    _ok, _kb, _msg = await check_kb_perm(env, sor, kb_id, 'maintain')
+if not _ok:
+    return json.dumps({"status": "error", "error": _msg}, ensure_ascii=False)
+
 env = request._run_ns
 userorgid = await env.get_userorgid()
 

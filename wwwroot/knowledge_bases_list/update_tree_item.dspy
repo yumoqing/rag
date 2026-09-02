@@ -4,6 +4,15 @@ dbname = get_module_dbname('rag')
 async with db.sqlorContext(dbname) as sor:
     id = ns.get("id", "")
     name = ns.get("name", "")
+    # KB 维护角色校验（按节点反查 kb_id）
+    _recs = await sor.sqlExe("SELECT kb_id FROM rag_document_chunks WHERE id=${id}$", {"id": id})
+    await sor.sqlExe("COMMIT", {})
+    _kb_id = getattr(_recs[0], 'kb_id', '') if _recs else ''
+    from rag.init import check_kb_perm
+    env = request._run_ns
+    _ok, _kb, _msg = await check_kb_perm(env, sor, _kb_id, 'maintain')
+    if not _ok:
+        return json.dumps({"status": "error", "error": _msg}, ensure_ascii=False)
     await sor.sqlExe("UPDATE rag_document_chunks SET content=${name}$ WHERE id=${id}$",
                      {"name": name, "id": id})
     return {"widgettype": "Message", "options": {"user_data": {"id": id, "label": name}}}
