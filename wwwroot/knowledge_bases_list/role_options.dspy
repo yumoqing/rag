@@ -1,0 +1,30 @@
+# 角色多选选项：value={orgtypeid}.{name}（与 RBAC 校验格式一致）
+ns = params_kw.copy()
+db = DBPools()
+dbname = get_module_dbname('rag')
+opts = [{"value": "*", "text": "*（全部角色）"}]
+try:
+    async with db.sqlorContext(dbname) as sor:
+        recs = await sor.sqlExe(
+            "SELECT DISTINCT orgtypeid, name FROM role "
+            "WHERE orgtypeid IS NOT NULL AND name IS NOT NULL "
+            "ORDER BY orgtypeid, name LIMIT 60", {})
+        await sor.sqlExe("COMMIT", {})
+        seen = set()
+        for r in (recs or []):
+            o = getattr(r, 'orgtypeid', '') or ''
+            n = getattr(r, 'name', '') or ''
+            if not o or not n:
+                continue
+            key = o + '.' + n
+            if key in seen:
+                continue
+            seen.add(key)
+            opts.append({"value": key, "text": key})
+        # 机构通配选项
+        orgs = sorted({(getattr(r, 'orgtypeid', '') or '') for r in (recs or []) if getattr(r, 'orgtypeid', '')})
+        for o in orgs:
+            opts.append({"value": o + ".*", "text": o + ".*（该机构全部）"})
+except Exception as e:
+    info('role_options: ' + str(e))
+return json.dumps(opts, ensure_ascii=False)

@@ -10,8 +10,8 @@
         "fields": [
             {"name": "name", "label": "名称", "uitype": "str", "required": true},
             {"name": "description", "label": "描述", "uitype": "text"},
-            {"name": "maintain_roles", "label": "维护角色", "uitype": "str", "tip": "逗号分隔角色名（如 RBACorg.admin）；空=同机构登录用户均可维护；*=全部"},
-            {"name": "search_roles", "label": "检索角色", "uitype": "str", "tip": "逗号分隔角色名；空=同机构登录用户均可检索/下载；*=全部"},
+            {"name": "maintain_roles", "label": "维护角色（可多选）", "uitype": "checkbox", "multicheck": true, "dataurl": "{{entire_url('./role_options.dspy')}}", "valueField": "value", "textField": "text", "tip": "不选=同机构登录用户均可维护"},
+            {"name": "search_roles", "label": "检索角色（可多选）", "uitype": "checkbox", "multicheck": true, "dataurl": "{{entire_url('./role_options.dspy')}}", "valueField": "value", "textField": "text", "tip": "不选=同机构登录用户均可检索/下载"},
             {"name": "embedding_type", "label": "向量引擎", "uitype": "code", "value": "bge-m3", "dataurl": "{{entire_url('./embedding_options.dspy')}}", "valueField": "value", "textField": "text"}
         ]
     }
