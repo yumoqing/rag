@@ -26,14 +26,5 @@
             {"name": "search_roles", "label": "检索角色（可多选）", "uitype": "checkbox", "multicheck": true, "dataurl": "{{entire_url('./role_options.dspy')}}", "valueField": "value", "textField": "text", "tip": "不选=同机构登录用户均可检索/下载"},
             {"name": "embedding_type", "label": "向量引擎", "uitype": "code", "value": "bge-m3", "dataurl": "{{entire_url('./embedding_options.dspy')}}", "valueField": "value", "textField": "text"}
         ]
-    },
-    "binds": [
-        {
-            "wid": "self",
-            "event": "submited",
-            "actiontype": "script",
-            "target": "self",
-            "script": "var u='/rag/knowledge_bases_list/kb_list.dspy?_webbricks_=1';fetch(u).then(function(r){return r.json()}).then(function(d){var mc=bricks.getWidgetById('rag_main_content',bricks.app.root);if(mc){mc.clear_widgets();bricks.widgetBuild(d,mc).then(function(w){if(w)mc.add_widget(w)})}})"
-        }
-    ]
+    }
 }
