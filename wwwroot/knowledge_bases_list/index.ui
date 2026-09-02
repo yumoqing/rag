@@ -114,10 +114,21 @@
             }
         },
         {
-            "widgettype": "urlwidget",
+            "widgettype": "VBox",
+            "id": "rag_main_content",
             "options": {
-                "url": "{{entire_url('./kb_list.dspy')}}"
-            }
+                "css": "filler",
+                "width": "100%",
+                "height": "100%"
+            },
+            "subwidgets": [
+                {
+                    "widgettype": "urlwidget",
+                    "options": {
+                        "url": "{{entire_url('./kb_list.dspy')}}"
+                    }
+                }
+            ]
         }
     ]
 }
