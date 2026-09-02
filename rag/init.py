@@ -584,7 +584,10 @@ async def file_serve_handler(request, params_kw, *args, **kwargs):
             doc = recs[0]
             ok, kb, msg = await check_kb_perm(env, sor, doc.kb_id, 'search')
             if not ok:
-                return json.dumps({"error": "kb_perm_denied", "message": msg}, ensure_ascii=False)
+                # 维护者也需要下载文件（管理职责）
+                ok2, _, _ = await check_kb_perm(env, sor, doc.kb_id, 'maintain')
+                if not ok2:
+                    return json.dumps({"error": "kb_perm_denied", "message": msg}, ensure_ascii=False)
             fp = doc.file_path or ''
             if fp.startswith('/rags/'):
                 parts = [p for p in fp.split('/') if p]

@@ -14,8 +14,11 @@ from rag.init import check_kb_perm
 env = request._run_ns
 async with db.sqlorContext(dbname) as sor:
     _ok, _kb, _msg = await check_kb_perm(env, sor, kb_id, 'search')
-if not _ok:
-    return {"widgettype": "Text", "options": {"text": "⛔ " + _msg, "cfontsize": 13, "color": "#f56c6c", "halign": "center", "marginTop": "40px"}}
+    if not _ok:
+        # 维护者也需要看到文件列表/下载文件（管理职责）
+        _ok2, _kb, _msg2 = await check_kb_perm(env, sor, kb_id, 'maintain')
+        if not _ok2:
+            return {"widgettype": "Text", "options": {"text": "⛔ " + _msg, "cfontsize": 13, "color": "#f56c6c", "halign": "center", "marginTop": "40px"}}
 
 rows = []
 try:
