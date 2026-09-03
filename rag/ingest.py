@@ -10,6 +10,7 @@ ingest_one(doc_id, kb_id, file_name, ext_l, real_path):
 避免 UI 上传与 /rag/api 对外上传两份入库实现分叉。
 """
 import json, os, base64, subprocess
+from appPublic.log import exception
 from ahserver.serverenv import ServerEnv
 from sqlor.dbpools import DBPools
 from appPublic.streamhttpclient import StreamHttpClient
@@ -21,11 +22,40 @@ def _dbname():
     return _env.get_module_dbname('rag')
 
 
+async def _fail(db, _dbn, doc_id, reason):
+    """入库失败落库：状态置 failed + error_msg 记录真实原因（禁静默 pending）。"""
+    import traceback
+    tb = traceback.format_exc()
+    msg = reason + (' | ' + tb[-400:] if 'Traceback' in tb else '')
+    exception(f"ingest_one[{doc_id}] failed: {msg}")
+    try:
+        async with db.sqlorContext(_dbn) as sor:
+            await sor.sqlExe(
+                "UPDATE rag_documents SET status='failed', error_msg=${e}$, updated_at=NOW() WHERE id=${id}$",
+                {"id": doc_id, "e": msg[:600]})
+            await sor.sqlExe("COMMIT", {})
+    except Exception:
+        pass
+
+
 async def ingest_one(doc_id, kb_id, file_name, ext_l, real_path):
     db = DBPools()
     # 库名必须经宿主的 get_module_dbname 映射（ragserver→'rag'，pipeline-app→'pipeline'）
     # 后台任务无 request/env，用注入的全局函数解析；禁硬编码库名
-    _dbn = _dbname()
+    # 钩子缺失（如脱离服务进程的裸任务）必须落错，不能静默吞掉
+    try:
+        _dbn = _dbname()
+    except Exception as e:
+        exception(f"ingest_one[{doc_id}]: get_module_dbname 钩子不可用: {e}")
+        try:
+            async with db.sqlorContext('pipeline') as sor:
+                await sor.sqlExe(
+                    "UPDATE rag_documents SET status='failed', error_msg=${e}$, updated_at=NOW() WHERE id=${id}$",
+                    {"id": doc_id, "e": ('dbname 解析失败: ' + str(e))[:600]})
+                await sor.sqlExe("COMMIT", {})
+        except Exception:
+            pass
+        return
 
     # 读知识库向量引擎：
     #   bge-m3             → 在线文本(阿里, 1024维)
@@ -301,20 +331,23 @@ async def ingest_one(doc_id, kb_id, file_name, ext_l, real_path):
                 # 在线文本向量化（vl引擎→qwen3-vl原生；bge-m3→在线兼容；GPU CLIP 时代的老路径已移除）
                 embeddings = await _online_text_embed(chunks)
                 embeddings = [e for e in embeddings if e] or []
+                if not embeddings:
+                    await _fail(db, _dbn, doc_id,
+                        'embedding 返回空（在线引擎不可达/未配置，检查 rag_engine_configs 与 VDB_BASE=' + VDB_BASE + '）')
+                    return
 
-                vector_ids = []
-                if embeddings:
-                    try:
-                        client2 = StreamHttpClient()
-                        await ensure_vdb_collection(client2, kb_id)
-                        vdb_data = {"colname": kb_id, "data": [
-                            {"id": doc_id + "_c" + str(i), "vector": emb, "text": chunks[i]}
-                            for i, emb in enumerate(embeddings)]}
-                        resp3 = await client2.request('POST', VDB_BASE + '/v1/upsert', json=vdb_data)
-                        if json.loads(resp3).get('status') == 'SUCCEEDED':
-                            vector_ids = [doc_id + "_c" + str(i) for i in range(len(embeddings))]
-                    except:
-                        pass
+                client2 = StreamHttpClient()
+                await ensure_vdb_collection(client2, kb_id)
+                vdb_data = {"colname": kb_id, "data": [
+                    {"id": doc_id + "_c" + str(i), "vector": emb, "text": chunks[i]}
+                    for i, emb in enumerate(embeddings)]}
+                resp3 = await client2.request('POST', VDB_BASE + '/v1/upsert', json=vdb_data)
+                vdb_ret = json.loads(resp3)
+                if vdb_ret.get('status') != 'SUCCEEDED':
+                    await _fail(db, _dbn, doc_id,
+                        'VDB upsert 失败 @ ' + VDB_BASE + ': ' + str(vdb_ret)[:300])
+                    return
+                vector_ids = [doc_id + "_c" + str(i) for i in range(len(embeddings))]
 
                 async with db.sqlorContext(_dbn) as sor:
                     for i, chunk_text in enumerate(chunks):
@@ -324,14 +357,10 @@ async def ingest_one(doc_id, kb_id, file_name, ext_l, real_path):
                             "VALUES (${id}$, ${doc_id}$, ${kb_id}$, ${idx}$, ${content}$, ${vid}$, NOW())",
                             {"id": doc_id + "_c" + str(i), "doc_id": doc_id, "kb_id": kb_id,
                              "idx": i, "content": chunk_text[:2000], "vid": vid})
+                    await sor.sqlExe("COMMIT", {})
                 chunks_n = len(chunks)
     except Exception as e:
-        try:
-            async with db.sqlorContext(_dbn) as sor:
-                await sor.sqlExe(
-                    "UPDATE rag_documents SET status='failed', metadata=${meta}$, updated_at=NOW() WHERE id=${id}$",
-                    {"id": doc_id, "meta": json.dumps({"error": str(e)[:300]}, ensure_ascii=False)})
-        except: pass
+        await _fail(db, _dbn, doc_id, 'ingest 异常: ' + repr(e)[:300])
         return
 
     # --- finalize: mark document done + update KB chunk counts ---
