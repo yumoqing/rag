@@ -1,10 +1,7 @@
 # 对外 API：文件设置标签（全量语义，标签名不存在自动创建）
-# POST /rag/api/doc_set_tags.dspy   Authorization: Bearer <api-key>
+# POST /rag/api/doc_set_tags.dspy   认证：cookie 会话或 Authorization: Bearer <dapi key>，RBAC logined 把关
 # body/query: {kb_id, doc_id, tags:[名称...] 或 "a,b" | tag_ids:[id...] 或 "id1,id2"}
 from rag import api_core as C
-_ctx, _e = await C.verify_api_key(request)
-if _e:
-    return C._err(_e, code="unauthorized")
 _ns = await C.read_json_body(request, params_kw)
-env = C.make_api_env(_ctx)
+env = C.session_env(request)
 return await C.doc_set_tags(env, _ns)

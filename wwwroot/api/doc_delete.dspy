@@ -1,10 +1,7 @@
 # 对外 API：文件删除（级联清理向量/chunks/文件）
-# POST /rag/api/doc_delete.dspy   Authorization: Bearer <api-key>
+# POST /rag/api/doc_delete.dspy   认证：cookie 会话或 Authorization: Bearer <dapi key>，RBAC logined 把关
 # body/query: {doc_id}
 from rag import api_core as C
-_ctx, _e = await C.verify_api_key(request)
-if _e:
-    return C._err(_e, code="unauthorized")
 _ns = await C.read_json_body(request, params_kw)
-env = C.make_api_env(_ctx)
+env = C.session_env(request)
 return await C.doc_delete(env, _ns)

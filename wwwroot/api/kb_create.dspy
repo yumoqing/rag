@@ -1,10 +1,7 @@
 # 对外 API：创建知识库
-# POST /rag/api/kb_create.dspy   Authorization: Bearer <api-key>
+# POST /rag/api/kb_create.dspy   认证：cookie 会话或 Authorization: Bearer <dapi key>，RBAC logined 把关
 # body(JSON 或 query): {name, description?, embedding_engine?}
 from rag import api_core as C
-_ctx, _e = await C.verify_api_key(request)
-if _e:
-    return C._err(_e, code="unauthorized")
 _ns = await C.read_json_body(request, params_kw)
-env = C.make_api_env(_ctx)
+env = C.session_env(request)
 return await C.kb_create(env, _ns)

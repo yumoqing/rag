@@ -1,25 +1,23 @@
 # -*- coding:utf-8 -*-
-"""RAG 对外 API 核心（B2B 机器接口）— dapi Bearer Key 鉴权 + org 注入。
+"""RAG 对外 API 核心（B2B 机器接口）— RBAC 会话鉴权 + dapi 平台 key 管理。
 
-与 UI 通道的关系：
-- UI 通道（wwwroot/knowledge_bases_list/*.dspy）：RBAC 登录会话鉴权，org/user 取自会话；
-- API 通道（wwwroot/api/*.dspy → 本模块）：路由/权限照常由 RBAC 控制
-  （端点授 any），业务身份由 **dapi 模块**的 Bearer Key 决定（平台统一 key 管理，
-  rag 不自建 key 表）。
+认证架构（对齐 sage 范式，rag 不自建 key 体系）：
+- API 端点路由权限 = **logined**（见 scripts/load_path.py），鉴权统一收敛在 RBAC 中间件：
+  浏览器 cookie 会话 或 `Authorization: Bearer <downapikey>` 都能过门
+  （dapi.load_dapi() 注册 'Bearer '→bearer_auth，认证通过后 dapi 建立会话）；
+- 未认证 → RBAC 直接 401/403，**不进 dspy**；
+- dspy 用 session_env(request) 从请求会话取 org/user，机构隔离在 rag 边界强制。
 
-鉴权链路：调用方在 dapi 申请 downapikey（绑定 users 账号）→ 本模块 verify_api_key()
-调 dapi.get_apikey_user 校验（有效性/过期/IP白名单都在 dapi）→ 从认证用户取 orgid
-→ 机构隔离以该 org 为边界。
+key 生命周期（生成、过期、IP 白名单）全归平台 dapi 模块
+（downapp/downapikey 表 + key 申请管理 UI），rag 只消费认证结果。
+downappuser 角色不授 rag 权限，仅作为该调用方的 RBAC 身份。
 
-org 注入方式：构造一个轻量 env（DictObject），get_userorgid/get_user 返回 key 用户所属
-机构，get_module_dbname 等透传全局 ServerEnv —— 复用 init.py 的底层能力
-（_resolve_search_kbs/_build_search_vector/_call_uapi 等），杜绝双实现分叉。
+org 注入方式（session_env）：返回真实请求 _run_ns，get_userorgid/get_user 走会话读取
+（auth.remember 的签名 cookie，bearer_auth 在权限校验阶段已建立）—— 与 UI 通道同一
+机制，复用 init.py 底层能力（_resolve_search_kbs/_build_search_vector/_call_uapi 等）。
 
-权限语义（v1）：
-- key 即用户级凭据：org 隔离强制（只能操作本机构知识库），能力面等于该用户在本机构
-  的知识库操作范围；不再做 rag 侧 scopes（授权粒度归 dapi 账号管理）。
-
-2026-09-03 新增（配合 wwwroot/api/ 七个对外端点；key 管理复用 dapi 模块）。
+历史：2026-09-03 初版在 dspy 内用 rag 自建 rag_api_keys 表校验 Bearer Key；
+按「apikey 统一由 dapi 管理 + 路由至少 logined」重构为本方案，verify_api_key 已删除。
 """
 import json
 import os
@@ -30,39 +28,15 @@ from appPublic.dictObject import DictObject
 from sqlor.dbpools import get_sor_context
 
 
-# ────────────────────────── API Key 鉴权（dapi 统一管理） ──────────────────────────
+# ────────────────────────── 会话 env（org/user 取自认证会话） ──────────────────────────
 
-async def verify_api_key(request):
-    """用 dapi 模块验证调用方 Bearer Key（downapp/downapikey/users 三表）。
+def session_env(request):
+    """API 端点的业务 env：直接返回真实请求的运行 env（org 从会话取）。
 
-    平台级机制：key 有效性、过期、IP 白名单、登录态、downappuser 角色 全由
-    dapi.apikey_user 负责；rag 只消费鉴权结果，从认证用户反查 org_id。
-
-    返回 (ctx_dict, None) 或 (None, error_message)。
-    ctx = {org_id, user_id, username}
+    未认证请求到不了这里（RBAC logined 在路由层把关）。保留本函数作为统一入口，
+    将来需要加 API 侧横切（限流头/审计标签）时只改这里。
     """
-    auth = request.headers.get('Authorization', '') or ''
-    token = auth[7:].strip() if auth.startswith('Bearer ') else ''
-    if not token:
-        token = (request.headers.get('x-api-key', '') or '').strip()
-    if not token:
-        return None, "missing api key（Authorization: Bearer *** 或 x-api-key 头）"
-
-    from dapi.dapi import get_apikey_user
-
-    env = ServerEnv()
-    dbname = env.get_module_dbname('dapi')
-    client_ip = (request.get('client_ip') if hasattr(request, 'get') else '') or ''
-    async with get_sor_context(env, dbname) as sor:
-        user = await get_apikey_user(sor, token, client_ip)
-        await sor.sqlExe("COMMIT", {})
-    if user is None:
-        return None, "invalid api key"
-    org_id = str(getattr(user, 'orgid', '') or getattr(user, 'org_id', '') or '')
-    if not org_id:
-        return None, "api key user has no org"
-    return {"org_id": org_id, "user_id": str(getattr(user, 'id', '') or ''),
-            "username": str(getattr(user, 'username', '') or '')}, None
+    return request._run_ns
 
 
 async def read_json_body(request, params_kw):
@@ -83,10 +57,14 @@ async def read_json_body(request, params_kw):
     return dict(params_kw or {})
 
 
-# ────────────────────────── org 注入 env ──────────────────────────
+# ────────────────────────── org 注入 env（内部 tools 通道专用） ──────────────────────────
 
 def make_api_env(ctx):
-    """轻量 env：org 取自 API key，其余透传全局 ServerEnv。"""
+    """轻量 env：org 由调用方（内部助手宿主）注入，其余透传全局 ServerEnv。
+
+    HTTP API 通道用 session_env(request)（会话身份）；内部 tools 通道没有 HTTP
+    请求，宿主助手注入可信 org_id 走本函数。
+    """
     g = ServerEnv()
 
     async def _orgid():
