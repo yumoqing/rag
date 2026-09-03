@@ -143,8 +143,8 @@ async def extract_voiceprint(file_data, file_name):
 
 async def process_upload(env, file_data, kb_id, folder_id, file_name):
     """Full upload pipeline — save + classify + process + DB record"""
-    import uuid as _uuid
-    doc_id = str(_uuid.uuid4()).hex[:16]
+    from appPublic.uniqueID import getID
+    doc_id = getID()
     ext = '.' + file_name.rsplit('.', 1)[1] if '.' in file_name else '.bin'
     saved_name = doc_id + ext
     file_path = '/d/rag/ragserver/pkgs/rag/rag/files/' + saved_name

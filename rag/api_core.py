@@ -21,7 +21,7 @@ org 注入方式（session_env）：返回真实请求 _run_ns，get_userorgid/g
 """
 import json
 import os
-import uuid as _uuid
+from appPublic.uniqueID import getID
 
 from ahserver.serverenv import ServerEnv
 from appPublic.dictObject import DictObject
@@ -107,7 +107,7 @@ async def kb_create(env, ns):
     if emb not in _ENGINES:
         return _err("embedding_engine must be one of " + "/".join(_ENGINES))
     org_id = await env.get_userorgid()
-    kb_id = _uuid.uuid4().hex
+    kb_id = getID()
     from rag.init import get_rags_base, ensure_kb_dir
     async with get_sor_context(env, 'rag') as sor:
         dup = await sor.sqlExe(
@@ -289,7 +289,7 @@ async def tag_create(env, ns):
         if existing:
             r = existing[0]
             return _ok(tag_id=r.id, name=r.name, color=r.color, duplicate=True)
-        tag_id = _uuid.uuid4().hex
+        tag_id = getID()
         await sor.sqlExe(
             "INSERT INTO rag_tags (id, kb_id, name, color, org_id, created_at) "
             "VALUES (${id}$, ${k}$, ${n}$, ${c}$, ${o}$, NOW())",
@@ -333,7 +333,7 @@ async def doc_set_tags(env, ns):
             if recs:
                 tag_ids_in.append(recs[0].id)
             else:
-                tid = _uuid.uuid4().hex
+                tid = getID()
                 await sor.sqlExe(
                     "INSERT INTO rag_tags (id, kb_id, name, color, org_id, created_at) "
                     "VALUES (${id}$, ${k}$, ${n}$, '#3b82f6', ${o}$, NOW())",
@@ -366,7 +366,7 @@ async def doc_set_tags(env, ns):
                 await sor.sqlExe(
                     "INSERT INTO rag_media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                     "VALUES (${id}$, ${k}$, 'document', ${d}$, ${t}$, NOW())",
-                    {"id": _uuid.uuid4().hex, "k": kb_id, "d": doc_id, "t": tid})
+                    {"id": getID(), "k": kb_id, "d": doc_id, "t": tid})
                 added += 1
         await sor.sqlExe("COMMIT", {})
         # 回读最终标签列表
@@ -411,7 +411,7 @@ async def doc_upload(env, ns, file_data, file_name):
             return _err(quota_msg, code="storage_quota_exceeded")
         rags_base = await get_rags_base(sor)
 
-    doc_id = _uuid.uuid4().hex
+    doc_id = getID()
     kb_dir = ensure_kb_dir(rags_base, org_id, kb_id)
     safe_name = file_name.replace('/', '_').replace('\\', '_')
     disk_name = doc_id[:8] + '_' + safe_name

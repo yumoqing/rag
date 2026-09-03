@@ -35,7 +35,7 @@ if used + file_size > quota_limit:
 web_path = await env.save_file(file_data, file_name)
 real_path = env.realpath(web_path)
 
-doc_id = str(uuid()).replace('-', '')[:16]
+doc_id = uuid()
 ext = '.' + file_name.rsplit('.', 1)[1] if '.' in file_name else '.bin'
 ext_l = ext.lower()
 

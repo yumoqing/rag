@@ -7,7 +7,8 @@ from ahserver.serverenv import ServerEnv
 from appPublic.registerfunction import RegisterFunction
 from appPublic.log import debug, exception
 from sqlor.dbpools import get_sor_context
-import json, os, uuid, time
+import json, os, time
+from appPublic.uniqueID import getID
 
 
 async def status_handler(request, params_kw, *args, **kwargs):
@@ -433,7 +434,7 @@ async def doc_upload_handler(request, params_kw, *args, **kwargs):
                     "message": "存储配额超限：机构已用 " + _fmt_bytes(used) + "，限额 " + _fmt_bytes(quota_limit) + "，本文件 " + _fmt_bytes(file_size)}, ensure_ascii=False)
 
         # ---- 保存到机构 rags 目录：{workspace_base}/{org}/rags/{kb}/ ----
-        doc_id = uuid.uuid4().hex
+        doc_id = getID()
         async with get_sor_context(env, 'rag') as sor:
             rags_base = await get_rags_base(sor)
         kb_dir = ensure_kb_dir(rags_base, userorgid, kb_id)
@@ -875,7 +876,7 @@ async def dir_create_handler(request, params_kw, *args, **kwargs):
             ok, kb, msg = await check_kb_perm(env, sor, kb_id, 'maintain')
             if not ok:
                 return json.dumps({"error": "kb_perm_denied", "message": msg}, ensure_ascii=False)
-            dir_id = uuid.uuid4().hex
+            dir_id = getID()
             await sor.sqlExe(
                 "INSERT INTO rag_document_chunks (id, doc_id, kb_id, chunk_index, chunk_type, content, description, created_at) "
                 "VALUES (${id}$, '', ${kb_id}$, 0, 'directory', ${name}$, ${parent}$, NOW())",
@@ -952,7 +953,7 @@ async def tag_create_handler(request, params_kw, *args, **kwargs):
             if existing:
                 return json.dumps({"status": "SUCCEEDED", "tag_id": existing[0].id, "name": name,
                                    "color": existing[0].color, "duplicate": True}, ensure_ascii=False)
-            tag_id = uuid.uuid4().hex
+            tag_id = getID()
             await sor.sqlExe(
                 "INSERT INTO rag_tags (id, kb_id, name, color, org_id, created_at) "
                 "VALUES (${id}$, ${kb_id}$, ${name}$, ${color}$, ${org_id}$, NOW())",
@@ -1009,7 +1010,7 @@ async def tag_assign_handler(request, params_kw, *args, **kwargs):
         if media_type not in ("document", "face", "voice"):
             return json.dumps({"error": "media_type must be document/face/voice"})
         async with get_sor_context(env, 'rag') as sor:
-            mt_id = uuid.uuid4().hex
+            mt_id = getID()
             await sor.sqlExe(
                 "INSERT INTO rag_media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                 "VALUES (${id}$, ${kb_id}$, ${type}$, ${mid}$, ${tid}$, NOW())",
@@ -1164,7 +1165,7 @@ async def tag_sync_handler(request, params_kw, *args, **kwargs):
             added = 0
             for tid in wanted_ids:
                 if tid not in current:
-                    mt_id = uuid.uuid4().hex
+                    mt_id = getID()
                     await sor.sqlExe(
                         "INSERT INTO rag_media_tags (id, kb_id, media_type, media_id, tag_id, created_at) "
                         "VALUES (${id}$, ${kb_id}$, ${type}$, ${mid}$, ${tid}$, NOW())",
@@ -1243,7 +1244,7 @@ async def engine_cfg_save_handler(request, params_kw, *args, **kwargs):
                 from appPublic.jsonConfig import getConfig
                 key = getConfig().password_key or 'QRIVSRHrthhwyjy176556332'
                 enc = password(api_key_plain, key=key) if api_key_plain else ""
-                rid = uuid.uuid4().hex
+                rid = getID()
                 await sor.sqlExe(
                     "INSERT INTO rag_engine_configs (id, engine_type, engine_name, endpoint_url, api_key, "
                     "model_name, is_default, priority, status, created_at, updated_at) "
