@@ -5,8 +5,6 @@ from rag import api_core as C
 _ctx, _e = await C.verify_api_key(request)
 if _e:
     return C._err(_e, code="unauthorized")
-if not C.require_scope(_ctx, "doc.upload"):
-    return C._err("api key lacks scope: doc.upload", code="forbidden")
 _ns = dict(params_kw or {})
 _file_data = await request.read()
 _file_name = _ns.get('file_name', '') or 'upload.bin'

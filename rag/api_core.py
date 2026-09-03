@@ -1,89 +1,68 @@
 # -*- coding:utf-8 -*-
-"""RAG 对外 API 核心（B2B 机器接口）— Bearer Key 鉴权 + org 注入。
+"""RAG 对外 API 核心（B2B 机器接口）— dapi Bearer Key 鉴权 + org 注入。
 
 与 UI 通道的关系：
 - UI 通道（wwwroot/knowledge_bases_list/*.dspy）：RBAC 登录会话鉴权，org/user 取自会话；
 - API 通道（wwwroot/api/*.dspy → 本模块）：路由/权限照常由 RBAC 控制
-  （端点授 any），业务身份由 rag_api_keys 的 Bearer Key 决定（绑定 org_id）。
+  （端点授 any），业务身份由 **dapi 模块**的 Bearer Key 决定（平台统一 key 管理，
+  rag 不自建 key 表）。
 
-org 注入方式：构造一个轻量 env（DictObject），get_userorgid/get_user 返回 key 绑定的
+鉴权链路：调用方在 dapi 申请 downapikey（绑定 users 账号）→ 本模块 verify_api_key()
+调 dapi.get_apikey_user 校验（有效性/过期/IP白名单都在 dapi）→ 从认证用户取 orgid
+→ 机构隔离以该 org 为边界。
+
+org 注入方式：构造一个轻量 env（DictObject），get_userorgid/get_user 返回 key 用户所属
 机构，get_module_dbname 等透传全局 ServerEnv —— 复用 init.py 的底层能力
 （_resolve_search_kbs/_build_search_vector/_call_uapi 等），杜绝双实现分叉。
 
 权限语义（v1）：
-- key 即机构级凭据：org 隔离强制（只能操作本机构知识库），KB 级 maintain_roles/
-  search_roles 是人类通道的门槛，对 API key 不生效（key 的授权面由 scopes 控制）；
-- scopes 逗号分隔：kb.create / kb.delete / doc.upload / doc.delete / tag.write / search；
-  '*' 全通。
+- key 即用户级凭据：org 隔离强制（只能操作本机构知识库），能力面等于该用户在本机构
+  的知识库操作范围；不再做 rag 侧 scopes（授权粒度归 dapi 账号管理）。
 
-2026-09-03 新增（配合 wwwroot/api/ 六个对外端点）。
+2026-09-03 新增（配合 wwwroot/api/ 七个对外端点；key 管理复用 dapi 模块）。
 """
 import json
 import os
-import time
 import uuid as _uuid
-from hashlib import sha256
 
 from ahserver.serverenv import ServerEnv
 from appPublic.dictObject import DictObject
 from sqlor.dbpools import get_sor_context
 
 
-# ────────────────────────── API Key 鉴权 ──────────────────────────
-
-def hash_key(plain):
-    return sha256((plain or '').encode('utf-8')).hexdigest()
-
+# ────────────────────────── API Key 鉴权（dapi 统一管理） ──────────────────────────
 
 async def verify_api_key(request):
-    """从 Authorization: Bearer <key> 或 x-api-key: <key> 验证调用方。
+    """用 dapi 模块验证调用方 Bearer Key（downapp/downapikey/users 三表）。
+
+    平台级机制：key 有效性、过期、IP 白名单、登录态、downappuser 角色 全由
+    dapi.apikey_user 负责；rag 只消费鉴权结果，从认证用户反查 org_id。
 
     返回 (ctx_dict, None) 或 (None, error_message)。
-    ctx = {org_id, key_id, name, scopes, user_id}
+    ctx = {org_id, user_id, username}
     """
-    token = ''
     auth = request.headers.get('Authorization', '') or ''
-    if auth.startswith('Bearer '):
-        token = auth[7:].strip()
+    token = auth[7:].strip() if auth.startswith('Bearer ') else ''
     if not token:
         token = (request.headers.get('x-api-key', '') or '').strip()
     if not token:
-        return None, "missing api key（Authorization: Bearer <key> 或 x-api-key 头）"
+        return None, "missing api key（Authorization: Bearer *** 或 x-api-key 头）"
+
+    from dapi.dapi import get_apikey_user
 
     env = ServerEnv()
-    async with get_sor_context(env, 'rag') as sor:
-        recs = await sor.sqlExe(
-            "SELECT id, org_id, name, scopes, status, expires_at FROM rag_api_keys "
-            "WHERE key_hash=${h}$ LIMIT 1", {"h": hash_key(token)})
+    dbname = env.get_module_dbname('dapi')
+    client_ip = (request.get('client_ip') if hasattr(request, 'get') else '') or ''
+    async with get_sor_context(env, dbname) as sor:
+        user = await get_apikey_user(sor, token, client_ip)
         await sor.sqlExe("COMMIT", {})
-        if not recs:
-            return None, "invalid api key"
-        r = recs[0]
-        if (getattr(r, 'status', '') or '') != 'active':
-            return None, "api key disabled"
-        exp = getattr(r, 'expires_at', None)
-        if exp is not None and str(exp).strip() and time.strftime('%Y-%m-%d %H:%M:%S') >= str(exp):
-            return None, "api key expired"
-        scopes = [s.strip() for s in str(getattr(r, 'scopes', '') or '').split(',') if s.strip()]
-        key_id = getattr(r, 'id', '')
-        # 最近使用时间（best-effort，失败不影响调用）
-        try:
-            await sor.sqlExe(
-                "UPDATE rag_api_keys SET last_used_at=NOW() WHERE id=${i}$", {"i": key_id})
-            await sor.sqlExe("COMMIT", {})
-        except Exception:
-            try:
-                await sor.sqlExe("COMMIT", {})
-            except Exception:
-                pass
-    return {"org_id": str(getattr(r, 'org_id', '') or ''), "key_id": key_id,
-            "name": str(getattr(r, 'name', '') or ''), "scopes": scopes,
-            "user_id": ''}, None
-
-
-def require_scope(ctx, scope):
-    sc = ctx.get('scopes') or []
-    return '*' in sc or scope in sc
+    if user is None:
+        return None, "invalid api key"
+    org_id = str(getattr(user, 'orgid', '') or getattr(user, 'org_id', '') or '')
+    if not org_id:
+        return None, "api key user has no org"
+    return {"org_id": org_id, "user_id": str(getattr(user, 'id', '') or ''),
+            "username": str(getattr(user, 'username', '') or '')}, None
 
 
 async def read_json_body(request, params_kw):

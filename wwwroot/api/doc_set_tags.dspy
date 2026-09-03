@@ -6,7 +6,5 @@ _ctx, _e = await C.verify_api_key(request)
 if _e:
     return C._err(_e, code="unauthorized")
 _ns = await C.read_json_body(request, params_kw)
-if not C.require_scope(_ctx, "tag.write"):
-    return C._err("api key lacks scope: tag.write", code="forbidden")
 env = C.make_api_env(_ctx)
 return await C.doc_set_tags(env, _ns)
