@@ -1,0 +1,12 @@
+# 对外 API：知识库检索（向量召回 + 重排；kb_id 缺省=本机构全部知识库）
+# POST /rag/api/search.dspy   Authorization: Bearer <api-key>
+# body/query: {query, kb_id?, top_k?(默认10), recall_k?(默认top_k*3)}
+from rag import api_core as C
+_ctx, _e = await C.verify_api_key(request)
+if _e:
+    return C._err(_e, code="unauthorized")
+_ns = await C.read_json_body(request, params_kw)
+if not C.require_scope(_ctx, "search"):
+    return C._err("api key lacks scope: search", code="forbidden")
+env = C.make_api_env(_ctx)
+return await C.search(env, _ns)

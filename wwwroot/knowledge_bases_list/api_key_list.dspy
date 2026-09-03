@@ -1,0 +1,35 @@
+# 管理端：API Key 列表（本机构；只展示前缀，不回显明文）
+# GET /rag/knowledge_bases_list/api_key_list.dspy
+ns = params_kw.copy()
+env = request._run_ns
+org_id = await env.get_userorgid()
+rows = []
+db = DBPools()
+async with db.sqlorContext(get_module_dbname('rag')) as sor:
+    recs = await sor.sqlExe(
+        "SELECT id, name, prefix, scopes, status, last_used_at, expires_at, created_at "
+        "FROM rag_api_keys WHERE org_id=${o}$ ORDER BY created_at DESC", {"o": org_id})
+    await sor.sqlExe("COMMIT", {})
+    for r in (recs or []):
+        st = getattr(r, 'status', '')
+        badge = '🟢' if st == 'active' else '⛔'
+        exp = str(getattr(r, 'expires_at', '') or '')
+        exp_s = ('至 ' + exp[:10]) if exp and exp != 'None' else '永久'
+        used = str(getattr(r, 'last_used_at', '') or '')
+        used_s = used[:16] if used and used != 'None' else '从未使用'
+        rows.append({"widgettype": "HBox", "options": {"spacing": "12px", "padding": "8px 12px", "borderBottom": "1px solid #eee"},
+                     "subwidgets": [
+            {"widgettype": "Text", "options": {"text": badge + " " + str(getattr(r, 'name', '') or ''), "cfontsize": 13}},
+            {"widgettype": "Text", "options": {"text": str(getattr(r, 'prefix', '')) + '…', "cfontsize": 12, "color": "#888"}},
+            {"widgettype": "Text", "options": {"text": str(getattr(r, 'scopes', '') or ''), "cfontsize": 11, "color": "#aaa"}},
+            {"widgettype": "Text", "options": {"text": exp_s + " · " + used_s, "cfontsize": 11, "color": "#aaa"}},
+            {"widgettype": "Button", "options": {"label": ("禁用" if st == 'active' else "启用"), "cfontsize": 11},
+             "binds": [{"wid": "self", "event": "click", "actiontype": "ajax",
+                        "options": {"url": entire_url('./api_key_revoke.dspy'),
+                                    "params": {"key_id": str(getattr(r, 'id', '')),
+                                               "action": ("disable" if st == 'active' else "enable")},
+                                    "success": "refresh"}}]},
+        ]})
+if not rows:
+    rows = [{"widgettype": "Text", "options": {"text": "暂无 API Key", "color": "#aaa"}}]
+return {"widgettype": "VBox", "options": {"width": "100%"}, "subwidgets": rows}

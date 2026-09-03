@@ -13,6 +13,18 @@ PATHS_ANY = [
     f"/{MOD}/knowledge_bases_list/upload.js",
 ]
 
+# 对外 B2B API 端点（路由权限授 any；业务鉴权靠 rag_api_keys 的 Bearer Key，
+# org 隔离与 scopes 在 rag/api_core.py 内强制——见模块 README「对外 API」）
+PATHS_API_ANY = [
+    f"/{MOD}/api/kb_create.dspy",
+    f"/{MOD}/api/kb_delete.dspy",
+    f"/{MOD}/api/doc_upload.dspy",
+    f"/{MOD}/api/doc_delete.dspy",
+    f"/{MOD}/api/tag_create.dspy",
+    f"/{MOD}/api/doc_set_tags.dspy",
+    f"/{MOD}/api/search.dspy",
+]
+
 # 登录用户可访问（知识库管理全部端点）
 PATHS_LOGINED = [
     f"/{MOD}",
@@ -51,6 +63,10 @@ PATHS_LOGINED = [
     # 存储用量
     f"/{MOD}/knowledge_bases_list/storage_card.dspy",
     f"/{MOD}/knowledge_bases_list/storage_stats.dspy",
+    # 对外 API Key 管理（管理端，登录会话鉴权）
+    f"/{MOD}/knowledge_bases_list/api_key_create.dspy",
+    f"/{MOD}/knowledge_bases_list/api_key_list.dspy",
+    f"/{MOD}/knowledge_bases_list/api_key_revoke.dspy",
     # CRUD 管理页
     f"/{MOD}/documents_list/index.ui",
     f"/{MOD}/engine_configs_list/index.ui",

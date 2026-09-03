@@ -1,0 +1,98 @@
+{
+    "summary": [
+        {
+            "name": "rag_api_keys",
+            "title": "对外API密钥",
+            "primary": [
+                "id"
+            ]
+        }
+    ],
+    "fields": [
+        {
+            "name": "id",
+            "title": "ID",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "org_id",
+            "title": "所属机构",
+            "type": "str",
+            "length": 32,
+            "nullable": "no"
+        },
+        {
+            "name": "name",
+            "title": "密钥名称",
+            "type": "str",
+            "length": 100,
+            "nullable": "yes"
+        },
+        {
+            "name": "key_hash",
+            "title": "密钥哈希(SHA256)",
+            "type": "str",
+            "length": 64,
+            "nullable": "no"
+        },
+        {
+            "name": "prefix",
+            "title": "密钥前缀(展示)",
+            "type": "str",
+            "length": 16,
+            "nullable": "yes"
+        },
+        {
+            "name": "scopes",
+            "title": "权限范围",
+            "type": "str",
+            "length": 500,
+            "nullable": "yes",
+            "default": ""
+        },
+        {
+            "name": "status",
+            "title": "状态",
+            "type": "str",
+            "length": 16,
+            "nullable": "yes",
+            "default": "active"
+        },
+        {
+            "name": "expires_at",
+            "title": "过期时间",
+            "type": "datetime",
+            "nullable": "yes"
+        },
+        {
+            "name": "last_used_at",
+            "title": "最近使用",
+            "type": "datetime",
+            "nullable": "yes"
+        },
+        {
+            "name": "created_at",
+            "title": "创建时间",
+            "type": "datetime",
+            "nullable": "yes"
+        }
+    ],
+    "indexes": [
+        {
+            "name": "idx_ak_hash",
+            "idxtype": "unique",
+            "idxfields": [
+                "key_hash"
+            ]
+        },
+        {
+            "name": "idx_ak_org",
+            "idxtype": "index",
+            "idxfields": [
+                "org_id"
+            ]
+        }
+    ]
+}

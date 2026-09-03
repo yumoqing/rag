@@ -1,0 +1,24 @@
+# 管理端：启用/禁用 API Key（只能操作本机构）
+# POST /rag/knowledge_bases_list/api_key_revoke.dspy  params: {key_id, action=disable|enable|delete}
+ns = params_kw.copy()
+env = request._run_ns
+org_id = await env.get_userorgid()
+key_id = (ns.get('key_id') or '').strip()
+action = (ns.get('action') or 'disable').strip()
+if not key_id:
+    return json.dumps({"status": "error", "error": "key_id required"})
+db = DBPools()
+async with db.sqlorContext(get_module_dbname('rag')) as sor:
+    recs = await sor.sqlExe(
+        "SELECT id FROM rag_api_keys WHERE id=${k}$ AND org_id=${o}$", {"k": key_id, "o": org_id})
+    await sor.sqlExe("COMMIT", {})
+    if not recs:
+        return json.dumps({"status": "error", "error": "key not found in your org"})
+    if action == 'delete':
+        await sor.sqlExe("DELETE FROM rag_api_keys WHERE id=${k}$", {"k": key_id})
+    elif action == 'enable':
+        await sor.sqlExe("UPDATE rag_api_keys SET status='active' WHERE id=${k}$", {"k": key_id})
+    else:
+        await sor.sqlExe("UPDATE rag_api_keys SET status='disabled' WHERE id=${k}$", {"k": key_id})
+    await sor.sqlExe("COMMIT", {})
+return json.dumps({"status": "SUCCEEDED", "action": action, "key_id": key_id})
