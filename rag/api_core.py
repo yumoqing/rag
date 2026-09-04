@@ -176,7 +176,9 @@ async def kb_delete(env, ns):
 
         # DB 记录
         if doc_ids:
-            await sor.sqlExe("DELETE FROM rag_document_chunks WHERE doc_id IN (${ids}$)", {"ids": doc_ids})
+            dmap = {("i%d" % i): d for i, d in enumerate(doc_ids)}
+            dph = ",".join("${" + k + "}$" for k in dmap)
+            await sor.sqlExe("DELETE FROM rag_document_chunks WHERE doc_id IN (" + dph + ")", dmap)
         await sor.sqlExe("DELETE FROM rag_entities WHERE kb_id=${k}$", {"k": kb_id})
         await sor.sqlExe("DELETE FROM rag_entity_relations WHERE kb_id=${k}$", {"k": kb_id})
         await sor.sqlExe("DELETE FROM rag_media_tags WHERE kb_id=${k}$", {"k": kb_id})

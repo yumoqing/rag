@@ -1132,21 +1132,27 @@ async def tag_search_handler(request, params_kw, *args, **kwargs):
                 voice_ids = [mid for mt, mid in matched if mt == "voice"]
                 results = []
                 if doc_ids:
+                    dmap = {("i%d" % i): d for i, d in enumerate(doc_ids)}
+                    dph = ",".join("${" + k + "}$" for k in dmap)
                     docs = await sor.sqlExe(
-                        "SELECT id, file_name, file_type, file_size, status, created_at FROM rag_documents WHERE id IN (${ids}$)",
-                        {"ids": doc_ids})
+                        "SELECT id, file_name, file_type, file_size, status, created_at FROM rag_documents WHERE id IN (" + dph + ")",
+                        dmap)
                     for d in docs:
                         results.append({"type": "document", "id": d.id, "name": d.file_name, "file_type": d.file_type, "size": d.file_size, "status": d.status, "created_at": str(d.created_at)})
                 if face_ids:
+                    fmap = {("i%d" % i): d for i, d in enumerate(face_ids)}
+                    fph = ",".join("${" + k + "}$" for k in fmap)
                     faces = await sor.sqlExe(
-                        "SELECT id, name, description, face_embedding_id, created_at FROM rag_entities WHERE id IN (${ids}$) AND entity_type='person'",
-                        {"ids": face_ids})
+                        "SELECT id, name, description, face_embedding_id, created_at FROM rag_entities WHERE id IN (" + fph + ") AND entity_type='person'",
+                        fmap)
                     for f in faces:
                         results.append({"type": "face", "id": f.id, "name": f.name, "description": f.description, "created_at": str(f.created_at)})
                 if voice_ids:
+                    vmap = {("i%d" % i): d for i, d in enumerate(voice_ids)}
+                    vph = ",".join("${" + k + "}$" for k in vmap)
                     voices = await sor.sqlExe(
-                        "SELECT id, name, description, voice_embedding_id, created_at FROM rag_entities WHERE id IN (${ids}$) AND entity_type='voice'",
-                        {"ids": voice_ids})
+                        "SELECT id, name, description, voice_embedding_id, created_at FROM rag_entities WHERE id IN (" + vph + ") AND entity_type='voice'",
+                        vmap)
                     for v in voices:
                         results.append({"type": "voice", "id": v.id, "name": v.name, "description": v.description, "created_at": str(v.created_at)})
                 if query:
