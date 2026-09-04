@@ -1,0 +1,7 @@
+# 对外 API：列出可见知识库（机构隔离 + search_roles 过滤，与检索同一权限解析）
+# POST /rag/api/kb_list.dspy   认证：cookie 会话或 Authorization: Bearer *** key>，RBAC logined 把关
+# body/query: {}（无参数）
+from rag import api_core as C
+_ns = await C.read_json_body(request, params_kw)
+env = C.session_env(request)
+return await C.kb_list(env, _ns)

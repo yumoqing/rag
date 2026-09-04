@@ -40,7 +40,8 @@ HTTP 状态码恒为 200（除鉴权失败 401），业务成败看 `status` 字
 | `/rag/api/doc_delete.dspy` | `doc_id`* | `{doc_id, kb_id, chunks_deleted, file_removed}` |
 | `/rag/api/tag_create.dspy` | `kb_id`*, `name`*, `color?` | `{tag_id, name, color}`（同名幂等返回已有并带 `duplicate:true`） |
 | `/rag/api/doc_set_tags.dspy` | `kb_id`*, `doc_id`*, `tags`(名称列表) \| `tag_ids`(ID列表) | `{doc_id, added, removed, tags:[{id,name,color}]}`（全量语义，空数组=清空） |
-| `/rag/api/search.dspy` | `query`*, `kb_id?`(缺省=本机构全部KB), `top_k?`(默认10), `recall_k?`(默认top_k*3) | `{results:[{chunk_id, text, score, kb_id, doc:{id,file_name,file_type,kb_id}}], total, recall, kbs_searched}` |
+| `/rag/api/search.dspy` | `query`*, `kb_id?`(缺省=本机构全部知识库), `top_k?`(默认10), `recall_k?`(默认top_k*3) | `{results:[{chunk_id, text, score, kb_id, doc:{id,file_name,file_type,kb_id}}], total, recall, kbs_searched}` |
+| `/rag/api/kb_list.dspy` | （无参数） | `{kbs:[{id, name, description, embedding_engine, doc_count, status}], total}`（调用者可见知识库：机构隔离+检索角色过滤） |
 
 `*` 为必填。缺失/非法一律返回 `{"status":"error","message":...}`，不会产生 500。
 
@@ -89,9 +90,9 @@ curl -s -X POST $BASE/kb_delete.dspy -H "Authorization: Bearer $KEY" \
 - 依赖基础设施：embedding/rerank 在线 API 与 VDB 服务
   （`upapp.rag-vdb` 的 baseurl）必须从部署机网络可达；不可达时 ingest/search 会明确报错而非假成功。
 
-## 内部助手（非 HTTP）
+## 内部助手（宿主 Agent）
 
-同一套能力封装为 OpenAI function-calling schema 供宿主 Agent 直调，不绕 HTTP：
-见 `rag/tools.py`（`rag_kb_create` 等 7 个）。宿主 env 需具备
-`db` / `get_user` / `get_userorgid` / `password_encode` / `get_module_dbname`；
-org 由宿主注入，与 API 通道的机构隔离语义一致。
+不提供同进程直调通道——宿主 Agent（如产线平台）一律走 HTTP API（Bearer key）：
+见 `wwwroot/api/README.md` 与 `rag/api_core.py`。key 由平台 dapi 模块按用户发放，
+检索范围受用户机构 + 知识库 `search_roles` 约束。
+（2026-09-04 原 `rag/tools.py` 直调通道已删除：未投产，且与「接口统一 API 模式」冲突。）

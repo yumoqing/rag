@@ -506,3 +506,32 @@ async def search(env, ns):
     } for h in enriched]
     return _ok(results=results, total=len(results),
                recall=len(all_hits), kbs_searched=len(kb_ids))
+
+
+async def kb_list(env, ns):
+    """列出调用者（按会话/Key 身份）可见的知识库：机构隔离 + search_roles 过滤。
+
+    与检索同一权限解析（_resolve_search_kbs 缺省返回全部可见库），供宿主
+    Agent 在检索/建议入库前先枚举可用知识库。
+    """
+    from rag.init import _resolve_search_kbs
+    org_id = await env.get_userorgid()
+    kb_ids = await _resolve_search_kbs(env, org_id, "")
+    if not kb_ids:
+        return _ok(kbs=[], total=0)
+    async with get_sor_context(env, 'rag') as sor:
+        nsmap = {("k%d" % i): k for i, k in enumerate(kb_ids)}
+        placeholders = ",".join("${" + k + "}$" for k in nsmap)
+        recs = await sor.sqlExe(
+            "SELECT id, name, description, embedding_engine, doc_count, status "
+            "FROM rag_knowledge_bases WHERE id IN (" + placeholders + ") "
+            "ORDER BY created_at DESC", nsmap)
+        await sor.sqlExe("COMMIT", {})
+    kbs = [{
+        "id": r.id, "name": getattr(r, 'name', '') or '',
+        "description": getattr(r, 'description', '') or '',
+        "embedding_engine": getattr(r, 'embedding_engine', '') or '',
+        "doc_count": int(getattr(r, 'doc_count', 0) or 0),
+        "status": getattr(r, 'status', '') or '',
+    } for r in (recs or [])]
+    return _ok(kbs=kbs, total=len(kbs))

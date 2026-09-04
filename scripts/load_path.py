@@ -64,6 +64,7 @@ PATHS_LOGINED = [
     f"/{MOD}/api/tag_create.dspy",
     f"/{MOD}/api/doc_set_tags.dspy",
     f"/{MOD}/api/search.dspy",
+    f"/{MOD}/api/kb_list.dspy",
     # CRUD 管理页
     f"/{MOD}/documents_list/index.ui",
     f"/{MOD}/engine_configs_list/index.ui",
