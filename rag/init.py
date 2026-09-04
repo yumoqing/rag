@@ -227,7 +227,13 @@ async def _build_search_vector(query, file_data, file_name, env=None, kb_id=''):
 
 
 def _parse_vdb_hits(vdb_resp, kb_id):
-    """Parse VDB search response into uniform hit format"""
+    """Parse VDB search response into uniform hit format.
+
+    兼容两种响应结构：
+    - 旧（平铺）：{"results": [...]} / 顶层直接是数组
+    - vdb v2.0（嵌套）：{"status":"SUCCEEDED","data":{"rows":[...]}}
+      ——顶层 data 是 dict 而非 list，须再进一层找 rows。
+    """
     hits = []
     data = vdb_resp
     if isinstance(data, dict):
@@ -236,6 +242,15 @@ def _parse_vdb_hits(vdb_resp, kb_id):
             if isinstance(candidates, list):
                 data = candidates
                 break
+        else:
+            # 嵌套结构兜底：data.data.rows（vdb v2.0 query 响应）
+            inner = data.get("data")
+            if isinstance(inner, dict):
+                for key in ("rows", "results", "hits", "data"):
+                    candidates = inner.get(key)
+                    if isinstance(candidates, list):
+                        data = candidates
+                        break
     if not isinstance(data, list):
         return hits
     for item in data:
