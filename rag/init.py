@@ -283,20 +283,38 @@ def _apply_rerank(hits, rerank_resp):
 
 
 async def _enrich_search_results(env, hits):
-    """Enrich hits with document metadata from DB"""
-    doc_ids = list(set(h.get("id", "") for h in hits if h.get("id")))
-    if not doc_ids:
+    """Enrich hits with document metadata from DB.
+
+    hit 的 id 是 chunk 向量 id（形如 <doc_id>_<n>），不是文档主键——须先经
+    rag_document_chunks 用向量 id 反查 doc_id，再取文档元数据；否则永远匹配不上
+    （2026-09-04 实测：document 恒为 {}）。"""
+    chunk_ids = list(set(h.get("id", "") for h in hits if h.get("id")))
+    if not chunk_ids:
         return hits
 
     async with get_sor_context(env, 'rag') as sor:
+        nsmap = {("c%d" % i): c for i, c in enumerate(chunk_ids)}
+        placeholders = ",".join("${" + k + "}$" for k in nsmap)
         recs = await sor.sqlExe(
-            "SELECT id, file_name, file_type, file_size, status, kb_id, created_at "
-            "FROM rag_documents WHERE id IN (" + ",".join(repr(d) for d in doc_ids) + ")", {})
-        doc_map = {r.id: dict(r) for r in recs}
+            "SELECT vector_id, doc_id FROM rag_document_chunks WHERE vector_id IN ("
+            + placeholders + ")", nsmap)
+        await sor.sqlExe("COMMIT", {})
+        chunk2doc = {r.vector_id: r.doc_id for r in (recs or [])}
+        doc_ids = list(set(chunk2doc.values()))
+        doc_map = {}
+        if doc_ids:
+            dmap = {("d%d" % i): d for i, d in enumerate(doc_ids)}
+            dph = ",".join("${" + k + "}$" for k in dmap)
+            drecs = await sor.sqlExe(
+                "SELECT id, file_name, file_type, file_size, status, kb_id, created_at "
+                "FROM rag_documents WHERE id IN (" + dph + ")", dmap)
+            await sor.sqlExe("COMMIT", {})
+            doc_map = {r.id: dict(r) for r in (drecs or [])}
 
     for h in hits:
-        did = h.get("id", "")
-        if did in doc_map:
+        cid = h.get("id", "")
+        did = chunk2doc.get(cid, "")
+        if did and did in doc_map:
             h["document"] = doc_map[did]
     return hits
 
