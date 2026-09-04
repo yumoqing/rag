@@ -124,10 +124,12 @@ async def search_handler(request, params_kw, *args, **kwargs):
         all_hits = []
         for kid in kb_ids:
             try:
+                # 键名必须与 uapi 的 vdb-search 模板占位符一致（colname/top_k），
+                # 传 collection/topK 模板不替换 → VDB 报错 → 静默 0 召回（2026-09-04 实测根因）
                 vdb_resp = await _call_uapi("rag-vdb", "search", {
-                    "collection": kid,
+                    "colname": kid,
                     "vector": query_vec,
-                    "topK": recall_k
+                    "top_k": recall_k
                 })
                 hits = _parse_vdb_hits(vdb_resp, kid)
                 all_hits.extend(hits)
@@ -766,7 +768,7 @@ async def _rag_ingest_async(env, text, kb_id, doc_id):
             embeddings = embeddings[:len(chunks)]
         try:
             vdb_data = {
-                "collection": kb_id,
+                "colname": kb_id,
                 "data": [{"id": f"{doc_id}_{i}", "vector": emb, "text": chunks[i]}
                          for i, emb in enumerate(embeddings)]
             }

@@ -474,7 +474,7 @@ async def search(env, ns):
     for kid in kb_ids:
         try:
             vdb_resp = await _call_uapi("rag-vdb", "search", {
-                "collection": kid, "vector": query_vec, "topK": recall_k})
+                "colname": kid, "vector": query_vec, "top_k": recall_k})
             all_hits.extend(_parse_vdb_hits(vdb_resp, kid))
         except Exception:
             pass
