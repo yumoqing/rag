@@ -1370,7 +1370,7 @@ async def engine_cfg_test_handler(request, params_kw, *args, **kwargs):
         return json.dumps({"error": str(e)[:200]})
 
 
-def init_rag_module():
+def load_rag():
     env = ServerEnv()
     rf = RegisterFunction()
     rf.register("status", status_handler)
@@ -1395,3 +1395,7 @@ def init_rag_module():
     rf.register("engine_cfg_get", engine_cfg_get_handler)
     rf.register("engine_cfg_save", engine_cfg_save_handler)
     rf.register("engine_cfg_test", engine_cfg_test_handler)
+
+
+# 兼容旧名（ragserver/pipeline-app 曾用 init_rag_module；规范名为 load_rag）
+init_rag_module = load_rag
