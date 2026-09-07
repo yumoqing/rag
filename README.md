@@ -20,7 +20,7 @@ wwwroot/         # 前端页面与 DSPY 端点
 build/           # 打包产物（勿手改）
 ```
 
-后端注册：`rag/init.py` 通过 `appPublic.registerfunction.RegisterFunction` 注册全部 DSPY handler（`kb_list`、`search`、`doc_upload`、`doc_delete`、`dir_*`、`tag_*`、`engine_options`、`status` 等）。
+后端注册：`rag/init.py` 通过 `appPublic.registerfunction.RegisterFunction` 注册全部 DSPY handler（`kb_list`、`search`、`doc_upload`、`doc_delete`、`dir_*`、`tag_*`、`engine_options`、`status` 等）。宿主入口调用规范名 `load_rag()`（旧名 `init_rag_module` 保留为别名，ragserver 等旧宿主无需改动）。
 
 ## 表清单（rag_ 前缀）
 
