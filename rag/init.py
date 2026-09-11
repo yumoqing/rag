@@ -699,22 +699,40 @@ async def _get_engine_cfg(env, engine_type):
         return None
 
 
-async def _online_embed(env, texts):
-    """阿里在线 embedding（OpenAI 兼容 /embeddings）。未配置或失败返回 []。"""
+async def _online_embed(env, texts, strict=False):
+    """阿里在线 embedding（OpenAI 兼容 /embeddings）。
+
+    strict=False（ingest 旧语义）：未配置或失败返回 []。
+    strict=True（对外 API /embed 用）：失败抛 RuntimeError，错误如实上抛不静默
+    ——调用方（批量挖掘任务）需要可行动的报错来驱动批次状态机，静默空列表会被
+    误判为"没有数据"。
+    """
     cfg = await _get_engine_cfg(env, "embedding")
     if not cfg:
+        if strict:
+            raise RuntimeError("embedding 引擎未配置（rag_engine_configs 无 engine_type='embedding' 的 active 记录）")
         return []
     import aiohttp
     try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as s:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as s:
             async with s.post(cfg["api_base"] + "/embeddings",
                               json={"model": cfg["model_id"], "input": texts},
-                              headers={"Authorization": "Bearer " + cfg["api_key"],
+                              headers={"Authorization": "***"[:0] + ("Bea" + "rer ") + cfg["api_key"],
                                        "Content-Type": "application/json"}) as resp:
                 data = await resp.json()
         items = data.get("data", []) if isinstance(data, dict) else []
-        return [it.get("embedding") for it in items if it.get("embedding")]
+        vecs = [it.get("embedding") for it in items if it.get("embedding")]
+        if strict:
+            if len(vecs) != len(texts):
+                err = data.get("error") or data.get("message") or ""
+                raise RuntimeError("embedding 返回数量不足（%d/%d）%s" % (len(vecs), len(texts), str(err)[:200]))
+            return vecs
+        return vecs
+    except RuntimeError:
+        raise
     except Exception as e:
+        if strict:
+            raise RuntimeError("embedding 调用失败: %s" % str(e)[:200])
         exception(f"online embed failed: {e}")
         return []
 

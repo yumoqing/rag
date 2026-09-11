@@ -1,0 +1,8 @@
+# 对外 API：文本向量化（与 ingest 同一 embedding 引擎；凭据单点在 rag_engine_configs）
+# POST /rag/api/embed.dspy   认证：cookie 会话或 Authorization: Bearer *** key>，RBAC logined 把关
+# body/query: {texts: ["文本1", "文本2", ...]}   单批上限 10 条，调用方自行分块
+# 返回 data: {vectors: [[float,...],...], model, dim, count}；失败返回业务 error（禁静默空）
+from rag import api_core as C
+_ns = await C.read_json_body(request, params_kw)
+env = C.session_env(request)
+return await C.embed_texts(env, _ns)

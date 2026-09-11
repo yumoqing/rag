@@ -97,6 +97,10 @@ def _err(message, **kw):
 
 _ENGINES = ("bge-m3", "clip-vith14", "qwen3-vl-embedding")
 
+# /embed 对外端点单批文本上限：dashscope 兼容模式 embeddings 单批 input 上限较小
+# （实测 2 条成功），保守设 10；调用方（挖掘批次任务）自行分块循环。
+_EMBED_BATCH_MAX = 10
+
 
 async def kb_create(env, ns):
     """创建知识库（embedding_engine 创建时定死，知识库级选：bge-m3文本 / clip-vith14多媒体 / qwen3-vl-embedding多模态在线）。"""
@@ -537,3 +541,45 @@ async def kb_list(env, ns):
         "status": getattr(r, 'status', '') or '',
     } for r in (recs or [])]
     return _ok(kbs=kbs, total=len(kbs))
+
+
+async def embed_texts(env, ns):
+    """文本向量化对外端点（与 ingest 同一 embedding 引擎，凭据单点在 rag）。
+
+    动机：其他模块（如商机产线的需求挖掘）需要把文本批量向量化，但不该各自持有
+    embedding api_key——统一走 rag 这个端点，凭据只在 rag_engine_configs 一处。
+    body: {texts: [str,...]}（必填，单批上限 _EMBED_BATCH_MAX）。
+    返回 data: {vectors: [[float,...],...], model, dim, count}。
+    失败（引擎未配置/上游报错）→ 业务 error，错误如实上抛，禁静默空数组
+    （调用方批量任务需要可行动报错驱动状态机）。
+    """
+    from rag.init import _online_embed
+    texts = ns.get("texts")
+    if isinstance(texts, str):
+        try:
+            texts = json.loads(texts)
+        except Exception:
+            texts = [texts]
+    if not isinstance(texts, list) or not texts:
+        return _err("texts required (非空字符串数组)")
+    texts = [str(t).strip() for t in texts]
+    if any(not t for t in texts):
+        return _err("texts 含空字符串")
+    if len(texts) > _EMBED_BATCH_MAX:
+        return _err("单批最多 %d 条（当前 %d）" % (_EMBED_BATCH_MAX, len(texts)),
+                    code="batch_too_large", max=_EMBED_BATCH_MAX)
+    try:
+        vecs = await _online_embed(env, texts, strict=True)
+    except Exception as e:
+        return _err(str(e)[:300], code="embed_failed")
+    if not vecs:
+        return _err("embedding 返回空（引擎不可达/未配置）", code="embed_empty")
+    dim = len(vecs[0]) if vecs else 0
+    cfg_model = ""
+    try:
+        from rag.init import _get_engine_cfg
+        _c = await _get_engine_cfg(env, "embedding")
+        cfg_model = (_c or {}).get("model_id", "")
+    except Exception:
+        cfg_model = ""
+    return _ok(vectors=vecs, model=cfg_model, dim=dim, count=len(vecs))

@@ -42,6 +42,7 @@ HTTP 状态码恒为 200（除鉴权失败 401），业务成败看 `status` 字
 | `/rag/api/doc_set_tags.dspy` | `kb_id`*, `doc_id`*, `tags`(名称列表) \| `tag_ids`(ID列表) | `{doc_id, added, removed, tags:[{id,name,color}]}`（全量语义，空数组=清空） |
 | `/rag/api/search.dspy` | `query`*, `kb_id?`(缺省=本机构全部知识库), `top_k?`(默认10), `recall_k?`(默认top_k*3) | `{results:[{chunk_id, text, score, kb_id, doc:{id,file_name,file_type,kb_id}}], total, recall, kbs_searched}` |
 | `/rag/api/kb_list.dspy` | （无参数） | `{kbs:[{id, name, description, embedding_engine, doc_count, status}], total}`（调用者可见知识库：机构隔离+检索角色过滤） |
+| `/rag/api/embed.dspy` | `texts`*（字符串数组，单批≤10） | `{vectors:[[float,...],...], model, dim, count}`（与 ingest 同一 embedding 引擎；失败返回业务 error 不静默） |
 
 `*` 为必填。缺失/非法一律返回 `{"status":"error","message":...}`，不会产生 500。
 
